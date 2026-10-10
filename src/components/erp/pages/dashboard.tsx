@@ -8,6 +8,9 @@ import { useNav } from "@/lib/erp/nav";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { useAction } from "@/lib/erp/client";
 import { Button } from "@/components/ui/button";
+import { ActivityWidget } from "../activity-widget";
+import { useSession } from "next-auth/react";
+import { asRole, isAdmin } from "@/lib/erp/auth-shared";
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -25,6 +28,8 @@ export default function DashboardPage() {
   const items = lookup(useApi<ItemRow[]>("/api/items").data);
   const { go } = useNav();
   const reseed = useAction("POST", "/api/seed", "Demo data reloaded");
+  const { data: session } = useSession();
+  const admin = isAdmin(asRole(session?.user?.role));
 
   if (isLoading || !data) {
     return (
@@ -41,9 +46,11 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">
           Live overview of Tau Power&apos;s manufacturing operations — inventory, orders, shop floor and supply chain.
         </p>
-        <Button variant="outline" size="sm" onClick={() => reseed.mutate(undefined as never)} disabled={reseed.isPending}>
-          <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reload demo data
-        </Button>
+        {admin && (
+          <Button variant="outline" size="sm" onClick={() => reseed.mutate(undefined as never)} disabled={reseed.isPending}>
+            <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reload demo data
+          </Button>
+        )}
       </div>
 
       <section className="space-y-3">
@@ -137,36 +144,41 @@ export default function DashboardPage() {
         </SectionCard>
       </div>
 
-      <SectionCard
-        title="Recent production orders"
-        right={
-          <button onClick={() => go("production")} className="text-xs text-primary hover:underline">View all</button>
-        }
-        bodyClassName="overflow-x-auto scroll-thin"
-      >
-        <table className="zebra w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted-foreground border-b">
-              <th className="text-left font-medium px-5 py-2">Order</th>
-              <th className="text-left font-medium px-3">Product</th>
-              <th className="text-right font-medium px-3">Qty</th>
-              <th className="text-right font-medium px-3">Due</th>
-              <th className="text-left font-medium px-5">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders?.slice(0, 6).map((o) => (
-              <tr key={o.id} className="border-b last:border-0">
-                <td className="px-5 py-2 font-mono text-xs">{o.orderNo}</td>
-                <td className="px-3">{items.get(o.itemId)?.name}</td>
-                <td className="px-3 text-right tabular-nums">{qty(o.qty)}</td>
-                <td className="px-3 text-right tabular-nums text-muted-foreground">{o.dueDate}</td>
-                <td className="px-5"><StatusBadge status={o.status} /></td>
+      <div className="grid lg:grid-cols-3 gap-4">
+        <SectionCard
+          className="lg:col-span-2"
+          title="Recent production orders"
+          right={
+            <button onClick={() => go("production")} className="text-xs text-primary hover:underline">View all</button>
+          }
+          bodyClassName="overflow-x-auto scroll-thin"
+        >
+          <table className="zebra w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b">
+                <th className="text-left font-medium px-5 py-2">Order</th>
+                <th className="text-left font-medium px-3">Product</th>
+                <th className="text-right font-medium px-3">Qty</th>
+                <th className="text-right font-medium px-3">Due</th>
+                <th className="text-left font-medium px-5">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </SectionCard>
+            </thead>
+            <tbody>
+              {orders?.slice(0, 6).map((o) => (
+                <tr key={o.id} className="border-b last:border-0">
+                  <td className="px-5 py-2 font-mono text-xs">{o.orderNo}</td>
+                  <td className="px-3">{items.get(o.itemId)?.name}</td>
+                  <td className="px-3 text-right tabular-nums">{qty(o.qty)}</td>
+                  <td className="px-3 text-right tabular-nums text-muted-foreground">{o.dueDate}</td>
+                  <td className="px-5"><StatusBadge status={o.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionCard>
+
+        <ActivityWidget className="lg:col-span-1" />
+      </div>
     </div>
   );
 }

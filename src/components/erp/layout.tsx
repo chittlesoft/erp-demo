@@ -3,9 +3,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Boxes, Cpu, LayoutGrid, ShieldCheck, Network, Warehouse, Factory,
   CalendarClock, ScanSearch, Moon, Sun, Menu, X, Users, ShoppingCart, Receipt, BookOpen,
-  BarChart3, ArrowLeftRight,
+  BarChart3, ArrowLeftRight, Loader2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { useApi } from "@/lib/erp/client";
 import type { Settings } from "@/lib/erp/shared";
@@ -13,6 +14,8 @@ import { useNav, type View } from "@/lib/erp/nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { NotificationsBell } from "./notifications";
 import { ActivityFeed, ActivityButton } from "./activity-feed";
+import { LoginPage } from "./login-page";
+import { UserMenu } from "./user-menu";
 const NAV: { href: View; label: string; icon: typeof LayoutDashboard; group: string }[] = [
   { href: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "" },
   { href: "analytics", label: "Management Dashboards", icon: BarChart3, group: "" },
@@ -49,12 +52,31 @@ export function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const cfg = useApi<Settings>("/api/settings").data;
+  const { status } = useSession();
+  // Disable data fetches while unauthenticated/loading so the login screen
+  // doesn't fire the settings/dashboard/etc API calls before the user signs in.
+  const ready = status === "authenticated";
+  const cfg = useApi<Settings>("/api/settings", ready).data;
 
   useEffect(() => setMounted(true), []);
   useEffect(() => setOpen(false), [view]);
 
   const current = NAV.find((n) => n.href === view);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <p className="text-sm">Loading Tau Power ERP…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "unauthenticated") {
+    return <LoginPage />;
+  }
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -110,6 +132,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <span className="hidden sm:inline text-xs text-muted-foreground">Prototype · demo transactions</span>
               <ActivityButton />
               <NotificationsBell />
+              <UserMenu />
               <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
                 {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>

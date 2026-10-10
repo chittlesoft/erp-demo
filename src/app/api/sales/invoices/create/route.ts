@@ -1,6 +1,7 @@
 import { api, body } from "@/lib/erp/api";
 import { createInvoice } from "@/lib/erp/phase2";
 import { assert as pdiAssert, link as pdiLink } from "@/lib/erp/pdi";
+import { logActivity } from "@/lib/erp/activity";
 import { db } from "@/lib/db";
 
 type CreateInvoiceInput = {
@@ -22,12 +23,24 @@ export const POST = api(async (req) => {
   // After the invoice is created, link accepted un-invoiced PDI reports to it
   // (sets PdiReport.invoiceNo up to the dispatched qty). createInvoice returns
   // only the totals, so we look up the newest ACTIVE invoice for this SO to
-  // recover its id + invNo (the very row the transaction just inserted).
+  // recover its id + invNo (the very row the transaction just inserted). We
+  // also pull customer + total so the activity log entry is informative.
   const inv = await db.invoice.findFirst({
     where: { soId: input.soId, status: "ACTIVE" },
     orderBy: { id: "desc" },
-    select: { id: true, invNo: true },
+    select: { id: true, invNo: true, total: true, customer: { select: { name: true } } },
   });
-  if (inv) await pdiLink(input.soId, input.lines, inv.id, inv.invNo);
+  if (inv) {
+    await pdiLink(input.soId, input.lines, inv.id, inv.invNo);
+    await logActivity({
+      module: "sales",
+      action: "dispatch",
+      refType: "invoice",
+      refId: inv.invNo,
+      refIdInt: inv.id,
+      title: `Invoice ${inv.invNo} created (dispatched)`,
+      detail: `${inv.customer.name} · ₹${Math.round(inv.total)}`,
+    });
+  }
   return totals;
 });

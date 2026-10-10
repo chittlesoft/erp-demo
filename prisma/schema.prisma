@@ -513,3 +513,18 @@ model ActivityLog {
 
   @@map("activity_logs")
 }
+
+// ============================ Auth (NextAuth credentials) ============================
+
+// Demo users seeded idempotently by ensureUsers() in src/lib/erp/users.ts.
+// Passwords are stored as sha256 hex (Node crypto) — sufficient for a prototype.
+model User {
+  id        Int     @id @default(autoincrement())
+  email     String  @unique
+  name      String
+  password  String                 // sha256 hex hash
+  role      String  @default("viewer")  // "admin" | "operator" | "viewer"
+  active    Boolean @default(true)
+
+  @@map("users")
+}
