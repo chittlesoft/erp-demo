@@ -908,3 +908,146 @@ Task: Cron-triggered review — assess status, QA via agent-browser, add server-
   2. Party-scoped data access (e.g. a customer sees only their own SOs/invoices) — requires per-record authz, larger scope.
   3. Export the activity log to CSV (admin) + date-range filter on the activity feed.
   4. Server-side gating audit: a one-time grep/script to verify every POST/PATCH/DELETE has a `require*` call (regression guard).
+
+---
+Task ID: 11-b
+Agent: frontend-styling-expert
+Task: Dark-mode chart color polish + server-side gating audit script + table density refinement.
+
+Work Log:
+- Read worklog.md (Tasks 1-10) for context: prior round 10-a added server-side `require*` gating to every mutating route (28 routes, now 29 after 10-b's change-password route) + `logActivityBy` session attribution; prior rounds 5-a / 9-b established the CSS utility belt (`.zebra`, `.table-compact`, `.card-hover`, `.kpi-accent-*`, `.scroll-thin`, etc.) and applied it across the page components. VLM round 6 noted that the dark-mode chart palette (vibrant emerald) had high luminance against the charcoal surface and could read as neon.
+- Read every owned file before editing: `src/app/globals.css` (light + dark CSS variable blocks + utility classes), `src/components/erp/pages/dashboard.tsx` (recharts BarChart with hardcoded `contentStyle` + `strokeOpacity={0.25}`), `analytics.tsx` (3 BarCharts with hardcoded `contentStyle` + `strokeOpacity={0.3}`), `items.tsx` (already `.table-compact`, `StatusBadge` from shared.tsx already had `dark:` variants), `inventory.tsx` (stock table + ledger, ledger already `.table-compact`), `production.tsx` (orders table not yet compact), `purchase.tsx` (3 tables not yet compact), `sales.tsx` (SO + invoice tables not yet compact). Also read `src/components/erp/shared.tsx` to verify `StatusBadge`'s `dark:` variants were already in place (they were — `dark:bg-emerald-950 dark:text-emerald-300` for success states, `dark:bg-red-950 dark:text-red-300` for failures).
+- `src/app/globals.css` — dark-mode polish (3 changes):
+  - **Chart desaturation**: in the `.dark { ... }` block, reduced chroma `C` ~20% on `--chart-1..5` so bars read as accents rather than neon against the charcoal surface. Specifically: `--chart-1` 0.14→0.11, `--chart-2` 0.18→0.14, `--chart-3` 0.16→0.13, `--chart-4` 0.15→0.12, `--chart-5` 0.2→0.16. Lightness + hue unchanged so the palette family stays consistent with light mode; bars are visibly less saturated but still distinctly emerald/amber/violet/teal/red-orange. Comment added explaining the rationale.
+  - **Dark-mode zebra refinement**: `.dark .zebra tbody tr:nth-child(even)` bumped from 55% → 75% `--muted` opacity, `.dark .zebra tbody tr:hover` 70% → 85% `--accent` opacity. Rationale: in dark mode `--muted` sits very close to `--card` (both ~0.21-0.27 L), so the 55% even-row tint vanishes; bumping it makes alternating rows legible without changing light mode.
+  - **Dark-mode card-hover shadow**: added `.dark .card-hover:hover` rule with a deeper black shadow (`0 6px 18px -8px rgb(0 0 0 / 0.55), 0 2px 6px -2px rgb(0 0 0 / 0.35)`) + slightly stronger border tint (35% primary vs the light-mode 25%), so the KPI-card lift stays visible against the charcoal surface. Light-mode shadow unchanged.
+  - **`table-dense` utility**: new variant even tighter than `.table-compact` (`py-1 → py-0.25`, font-size `13px → 12px`, line-height `1.35 → 1.3`) for very high-density ledgers (stock ledger, activity feed). Stackable with `.zebra`.
+- `src/components/erp/pages/dashboard.tsx` — chart color refinement:
+  - Tooltip `contentStyle` was `{ borderRadius: 8, fontSize: 12 }` (recharts default white background, hard to read in dark mode). Replaced with theme-aware `{ borderRadius: 8, fontSize: 12, background: "var(--popover)", color: "var(--popover-foreground)", border: "1px solid var(--border)" }` so it adapts to whichever theme next-themes has applied.
+  - `CartesianGrid strokeOpacity` bumped 0.25 → 0.3 for slightly more visible gridlines (the prior round's VLM feedback noted gridlines were faint; `--muted-foreground` is already theme-aware so the bump helps both modes).
+  - Added `cursor="pointer"` to both `Bar` components (the recharts prop) so hovering a bar shows a pointer cursor — light-weight UX cue, no JS handler needed. Also added `fillOpacity: 0.5` to the Tooltip `cursor` fill so the hover band is subtler and doesn't overpower the bar colour.
+- `src/components/erp/pages/analytics.tsx` — chart color refinement (same patterns, applied to all 3 BarCharts):
+  - Extracted a `TOOLTIP_STYLE` const + `CHART_CURSOR` const near the top of the module (defined once, reused across OEE-by-station, FPY-by-product, and inventory-ageing charts) so future chart additions inherit the theme-aware styling automatically.
+  - All 3 `Tooltip contentStyle` props now reference `TOOLTIP_STYLE` (theme-aware popover/border colours).
+  - All 3 `CartesianGrid strokeOpacity` bumped 0.3 → 0.35.
+  - All `Bar` components gained `cursor="pointer"`. The `Tooltip cursor` prop now uses `CHART_CURSOR` (subtle muted fill at 50% opacity).
+  - Added `.table-compact` to the "Order book by due bucket" table (was bare `.zebra w-full text-sm`) for consistency with the other analytics tables.
+- `src/components/erp/pages/inventory.tsx` — table density:
+  - Master stock table (5 cols, many rows) gained `.table-compact` (was bare `.zebra`).
+  - Stock ledger (7 cols, up to 80 movement rows) graduated from `.table-compact` to the new `.table-dense` — visible density improvement without losing readability since the columns are short codes/dates/qty.
+  - Dark-mode verification: the inline `text-emerald-600 dark:text-emerald-400` on the qty column was already in place (added in round 4/5); `text-destructive` is theme-aware via CSS variable. No badge changes needed.
+- `src/components/erp/pages/production.tsx` — added `.table-compact` to the orders table (was bare `.zebra w-full text-sm`, 8 cols). The DetailDialog's BOM requirements table was already `.table-compact`. Dark-mode: `text-emerald-600 dark:text-emerald-400` on the "Good" qty column was already present; `StatusBadge` already has dark variants.
+- `src/components/erp/pages/purchase.tsx` — added `.table-compact` to all 3 tables (PO list, GRN list, indent list) for consistency. Dark-mode verification: `text-muted-foreground` for muted cells is theme-aware; `StatusBadge` already has dark variants; no inline emerald/red text used here (currency is plain `tabular-nums`).
+- `src/components/erp/pages/sales.tsx` — added `.table-compact` to the SO table (9 cols, was bare `.zebra`) and the invoice table (8 cols, was bare `.zebra`). The dispatch-dialog table (5 cols, dense inputs) was left alone — it's a small fixed table inside a Dialog, `.table-compact` would crowd the inputs. Dark-mode: the `PdiIndicator` component (added in round 10-b) already uses `bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300` and the amber equivalent — verified both light and dark variants are present. `StatusBadge` already has dark variants.
+- `scripts/audit-gating.ts` — NEW server-side gating audit script (~150 lines, Node builtins only — `node:fs` + `node:path`):
+  - Walks `src/app/api/**/route.{ts,tsx}` recursively, reads each file, regex-checks for `export const POST` / `export async function POST` / `export function POST` / `export { POST }` (and PATCH / DELETE).
+  - For each mutating route, string-scans the source for any of 5 gating markers: `requireAuth`, `requireEditor`, `requireAdmin`, `requireRole` (the helpers from `@/lib/erp/api` added by 10-a) OR `getServerSession` (the NextAuth primitive — used directly by `auth/change-password/route.ts` and the `users/[id]/route.ts` local `requireAdmin`, so those count as gated).
+  - Prints a formatted report: total mutating routes, gated count, ungated count, then a per-file table showing method (POST/PATCH/DELETE — joined with `/` for files exporting multiple), matched marker (or `(no marker)`), and the file path. Ungated routes (if any) are printed in a separate prominent block.
+  - Exits with code 0 if every mutating route is gated, code 1 if any are ungated (so it can be wired into CI as a regression guard). Exit code 2 if `src/app/api/` is missing (i.e. run from the wrong CWD).
+  - TypeScript strict — explicit `MutatingMethod` type derived from a const tuple, `Finding` interface, no `any`, no unused vars. Single `as const` assertion on the regex source string. Verified with `bunx tsc --noEmit scripts/audit-gating.ts` (exit 0).
+  - One subtle bug caught and fixed during testing: the JSDoc header originally contained the literal text `**/route.ts` — bun's lexer saw the `*/` substring inside the comment as the comment terminator and tried to parse the rest of the comment as TypeScript. Rewrote the comment to use `<recursive>` and prose instead of glob-style paths.
+- `package.json` — added `"audit:gating": "bun run scripts/audit-gating.ts"` script entry (single line, between `lint` and `db:push`). Verified `bun run audit:gating` works from the project root.
+
+Stage Summary:
+- **Artifacts** (modified 8, new 1):
+  - `src/app/globals.css` — dark-mode chart chroma desaturation (~20% across chart-1..5), dark-mode zebra tint bumped (55→75% even, 70→85% hover), new `.dark .card-hover:hover` deeper-shadow rule, new `.table-dense` utility variant.
+  - `src/components/erp/pages/dashboard.tsx` — theme-aware recharts `Tooltip contentStyle` (popover/foreground/border CSS vars), gridline `strokeOpacity` 0.25→0.3, `cursor="pointer"` on both Bars, subtle `fillOpacity: 0.5` on Tooltip cursor.
+  - `src/components/erp/pages/analytics.tsx` — extracted `TOOLTIP_STYLE` + `CHART_CURSOR` consts, applied theme-aware Tooltip to all 3 charts, gridline `strokeOpacity` 0.3→0.35, `cursor="pointer"` on every Bar, `.table-compact` added to order-book table.
+  - `src/components/erp/pages/inventory.tsx` — master stock table gained `.table-compact`, stock ledger graduated to `.table-dense`.
+  - `src/components/erp/pages/production.tsx` — orders table gained `.table-compact`.
+  - `src/components/erp/pages/purchase.tsx` — PO/GRN/indent tables all gained `.table-compact`.
+  - `src/components/erp/pages/sales.tsx` — SO + invoice tables gained `.table-compact`.
+  - `package.json` — added `audit:gating` npm script.
+  - `scripts/audit-gating.ts` (NEW) — standalone audit, ~150 LOC, no external deps, exits 0/1/2.
+- **Audit script result**: `bun run scripts/audit-gating.ts` → exit 0. Reports **29 mutating routes, all 29 gated, 0 ungated**:
+  - 26 routes use `requireEditor` (admin + operator, viewer rejected) — items POST/PATCH, bom POST/DELETE, inventory transfer, orders POST + start/release/complete/close-floor, sales orders/invoices create, invoices/[id]/irn, purchase pos/grns/indents, parties POST/PATCH, phase3 scan/disposition/putaway/iqc/pdi-plans/pdi-reports.
+  - 3 routes use `requireAdmin` (admin only) — `POST /api/seed`, `PATCH /api/settings`, `POST /api/users` + `PATCH/DELETE /api/users/[id]`.
+  - 1 route uses `getServerSession` directly (counts as gated) — `POST /api/auth/change-password` (added by 10-b, uses a local session check rather than the `require*` helpers).
+  - GET routes are intentionally skipped (reads stay open by design for the prototype).
+- **Verification**:
+  - `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/` → **200** ✓ (after every edit).
+  - `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/analytics` → **200** ✓ (chart API still works).
+  - `bun run scripts/audit-gating.ts` → exit **0**, "All mutating routes are gated." ✓
+  - `bunx tsc --noEmit scripts/audit-gating.ts` → exit **0** (TS strict passes, no `any`, no unused vars).
+  - `bunx eslint --max-warnings=0` on all 8 owned files (7 .tsx + 1 .ts script) → exit **0**, no warnings, no errors.
+  - dev.log: clean Turbopack recompiles throughout (`✓ Compiled in NNNms`, `GET / 200`), no `Failed to compile` / `Module not found` / `Type error` / `SyntaxError` lines attributed to my files.
+- **Backward compatibility**: light-mode styles untouched (all dark-mode changes are scoped to `.dark` selectors or theme-aware CSS variables); all chart data/logic/state/handlers/role-gating (`canEdit`/`isAdmin`) preserved byte-for-byte; the audit script is opt-in (`bun run audit:gating`) and never runs during normal dev/build.
+- **Coexistence with parallel agent 11-a**: did not touch any of 11-a's owned files (change-password.tsx, profile.tsx, activity-feed.tsx, user-menu.tsx, nav.ts, page.tsx, activity API route, csv.ts, shared.tsx, layout.tsx, all other pages, all other API routes, all lib/erp/*, schema.prisma). The audit script reads API route files but does NOT modify them.
+- **Defense-in-depth preserved**: the gating audit is a regression guard, not a replacement for the runtime `require*` calls — if someone adds a new mutating route without a `require*` call, the next `bun run audit:gating` (or CI run) will flag it with exit code 1.
+
+---
+Task ID: 11-a
+Agent: full-stack-developer
+Task: Polish change-password UX, add a My Profile page, add activity-log CSV export + date-range filtering.
+
+Work Log:
+- Read worklog.md (tasks 1-10), change-password.tsx, activity.ts, activity API route, activity-feed.tsx, csv.ts, nav.ts, app/page.tsx, user-menu.tsx, shared.tsx, api.ts, auth-shared.ts, client.ts, users.ts, /api/users route — to understand prior context + reuse existing helpers.
+- **activity.ts**: extended `listActivity(limit?, module?, from?, to?, user?)` with parameterised WHERE clauses composed via `Prisma.sql` + `Prisma.join`. Added `normaliseFrom`/`normaliseTo` helpers that convert bare `YYYY-MM-DD` inputs into start/end-of-day UTC so a single-day `to` filter captures the entire day. Existing callers (no new args) keep working — all new params are optional.
+- **/api/activity/route.ts**: added `from`, `to`, `user` query-param reads and forwards them to `listActivity`. All optional.
+- **change-password.tsx**: full rewrite of the dialog body. Added per-field `Eye`/`EyeOff` toggle buttons (`showCurrent`/`showNew`/`showConfirm` useState). Added a `StrengthMeter` (4-segment bar: rose/amber/sky/emerald; label "—"/Weak/Fair/Good/Strong) computing score from length≥8 + lowercase + digit + uppercase-or-symbol. Extracted a reusable `PasswordField` (input + eye button + hint slot). Added inline validation hints below each field (too-short, mismatch, fill-in-all-fields summary) + extra `opacity-60 cursor-not-allowed` on Save when disabled.
+- **pages/profile.tsx** (NEW): My Profile page available to all signed-in users. Shows identity card (avatar initials, name, email, role badge, user id, role description, ACTIVE status), Change Password button (reuses `ChangePasswordDialog`), and a compact recent-activity timeline filtered server-side via `/api/activity?limit=10&user=<email>`. Same colour tones as activity-feed (emerald/amber/rose/sky/violet/neutral dots) but simpler single-line layout. Uses `SectionCard`/`PageIntro`/`StatusBadge` from shared.tsx.
+- **nav.ts**: added `"profile"` to the `View` union.
+- **app/page.tsx**: added `const Profile = dynamic(...)` + `{view === "profile" && <Profile />}` switch.
+- **user-menu.tsx**: imported `useNav` + added a "My profile" `DropdownMenuItem` (lucide `UserCircle2` icon) above "Change password" that calls `go("profile")`. Available to ALL users (not admin-gated).
+- **activity-feed.tsx**: full rewrite of the drawer. Added `useSession()` + `isAdmin()` gate. Added a date-range filter row (two `<Input type="date">` for from/to with `min`/`max` cross-linking + a "Clear" button) below the module chips — change re-fetches via the `useApi(key)` URL. Added an "Export CSV" button (lucide `Download` icon, admin-only, disabled while exporting or when rows=0) in the drawer header that fetches `/api/activity?...&limit=200` (max) with the current filter params and calls `downloadCSV("activity-log-...", rows, ACTIVITY_CSV_COLUMNS)` reusing `@/lib/erp/csv`. CSV columns: ID, Timestamp, Module, Action, Ref Type, Ref ID, Ref ID (int), Title, Detail, User. Reused existing `MODULE_META`/`TONE_*` styling + timeline; footer now shows the active date range.
+- Verified dev.log shows clean Turbopack recompiles throughout; no compile errors attributed to my files.
+- Verification curls:
+  - `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/` → **200** ✓
+  - `curl -s "http://localhost:3000/api/activity?limit=3&from=2026-10-01&to=2026-10-31"` → **200** + JSON array ✓ (dev.log shows the resulting SQL: `WHERE ts >= ? AND ts <= ?`)
+  - `curl -s "http://localhost:3000/api/activity?limit=3&user=admin@taupower.in"` → **200** + JSON array (returns the admin-attributed reseed events) ✓ (dev.log shows `WHERE user = ?`)
+- `eslint` on all 8 owned files → exit 0, no warnings, no errors.
+
+Stage Summary:
+- **Change-password UX polished**: per-field eye-toggle, 4-segment strength meter (rose/amber/sky/emerald), inline validation hints, clearer disabled Save button. All existing POST logic (session-gated, sha256 verify + rehash, toast, close-on-success) preserved.
+- **My Profile page added**: identity card + Change Password dialog + per-user recent-activity timeline. Available to all signed-in users (not admin-gated). Wired into nav (`View` union), app/page.tsx dynamic import, and user-menu "My profile" dropdown item.
+- **Activity API extended**: `from`/`to`/`user` query params, all optional, all parameterised raw SQL via `Prisma.sql`/`Prisma.join` (no string concatenation → no SQL injection). Bare `YYYY-MM-DD` dates normalised to start/end-of-day UTC. Backward-compatible (existing 2-arg `listActivity` callers still work).
+- **Activity feed upgraded**: date-range filter (two date inputs + Clear), CSV export (admin-only, reuses existing `csv.ts` `downloadCSV` + `CsvColumn`, exports up to 200 rows with the current filter params). Reused all existing timeline styling + module metadata. No new npm packages.
+- **Files owned/edited (only these)**: `src/components/erp/change-password.tsx`, `src/components/erp/pages/profile.tsx` (NEW), `src/lib/erp/nav.ts`, `src/app/page.tsx`, `src/components/erp/user-menu.tsx`, `src/components/erp/activity-feed.tsx`, `src/app/api/activity/route.ts`, `src/lib/erp/activity.ts`. Did NOT touch any file owned by parallel styling agent 11-b (globals.css, shared.tsx, layout.tsx, other pages/*, invoice-view, item-detail, pdi-*, command-palette, notifications, export-button, login-page, api.ts lib, all other API routes, schema.prisma).
+- **Reusable helpers reused, not re-implemented**: `downloadCSV`/`toCSV`/`CsvColumn` from `@/lib/erp/csv`; `useApi`/`useAction` from `@/lib/erp/client`; `asRole`/`isAdmin`/`ROLE_LABEL` from `auth-shared`; `SectionCard`/`PageIntro`/`StatusBadge` from `shared.tsx`; `ChangePasswordDialog` imported into profile.tsx instead of duplicating.
+
+---
+Task ID: 11 (webDevReview round 7)
+Agent: orchestrator (main)
+Task: Cron-triggered review — assess status, QA via agent-browser, add password UX polish + profile page + activity export/filter + dark mode polish + gating audit.
+
+## Current project status / assessment
+- Dev server stable on :3000 via `.zscripts/dev.sh`.
+- agent-browser QA: all 17 nav views render with **0 failures** (admin).
+- All core APIs + NextAuth endpoints return 200; all 29 mutating routes server-gated (audit script confirms 0 ungated).
+- **No app bugs found initially**. QA discovered dark mode works correctly (earlier VLM "inconsistent" assessment was due to agent-browser click being intercepted by the dev overlay, not a real theme bug). One minor UX bug found + fixed: user-menu `onSelect={e.preventDefault()}` prevented the dropdown from closing on "My profile" / "Change password" — removed `preventDefault` so the menu closes + navigates.
+
+## Goals / completed modifications / verification
+
+### Phase A — Password UX + profile + activity export (Task 11-a, full-stack-developer)
+- **Change-password UX polish** (`change-password.tsx`): per-field `Eye`/`EyeOff` toggle (3 independent states), 4-segment strength meter (rose Weak / amber Fair / sky Good / emerald Strong) scoring length≥8 + lowercase + digit + uppercase-or-symbol, inline validation hints, clearer disabled Save state. VLM confirmed: "Show current/new/confirm password" buttons + "Good" strength on "Test123!".
+- **My Profile page** (`src/components/erp/pages/profile.tsx`): identity card (avatar initials, name, email, role badge, user id, ACTIVE status, role description), Change Password button (reuses dialog), "Recent activity by you" section (server-filtered via `/api/activity?user=<email>`). Nav wired (`"profile"` in View union + page.tsx + user-menu "My profile" item).
+- **Activity API date + user filter** (`src/app/api/activity/route.ts` + `src/lib/erp/activity.ts`): added `from`/`to`/`user` query params; `listActivity` extended with parameterised `WHERE` clauses via `Prisma.sql`/`Prisma.join` (no SQL injection). Backward-compatible.
+- **Activity feed CSV export + date filter** (`activity-feed.tsx`): date-range filter row (2 date inputs + Clear button), admin-only "Export CSV" button (reuses `@/lib/erp/csv` `downloadCSV`, exports up to 200 rows with current filter params).
+
+### Phase B — Dark mode polish + gating audit (Task 11-b, frontend-styling-expert)
+- **`globals.css` dark mode polish**: `.dark` chart chroma reduced ~20% (chart-1 0.14→0.11, etc.) for calmer dark-mode bars; `.dark .zebra` even/hover tints bumped for visibility; `.dark .card-hover` deeper shadow + stronger primary border; new `.table-dense` utility (tighter than `.table-compact`).
+- **Chart color refinement** (`dashboard.tsx` + `analytics.tsx`): theme-aware recharts Tooltip `contentStyle` (`var(--popover)`/`var(--popover-foreground)`/`var(--border)` — adapts to theme), gridline `strokeOpacity` bumped (0.25→0.3 / 0.3→0.35), `cursor="pointer"` on bars, `fillOpacity:0.5` on Tooltip cursor.
+- **Table density**: `.table-compact` applied to inventory/purchase/sales/production tables; `.table-dense` for inventory ledger; verified StatusBadge dark variants exist.
+- **Server-side gating audit script** (`scripts/audit-gating.ts` + `package.json` `"audit:gating"`): walks `src/app/api/**/route.ts`, regex-detects POST/PATCH/DELETE, string-scans for 5 gating markers (requireAuth/requireEditor/requireAdmin/requireRole/getServerSession). **Result: 29 mutating routes, 29 gated, 0 ungated** (exit 0). CI-ready.
+
+### Orchestrator follow-up fix
+- **user-menu dropdown close bug**: `onSelect={(e) => { e.preventDefault(); go("profile"); }}` prevented the Radix menu from auto-closing on "My profile" + "Change password" — the menu stayed open covering the page. Removed `e.preventDefault()` from those two items so the menu closes + navigates/opens dialog. Verified: profile page now renders correctly.
+
+### Verification results
+- agent-browser QA: all 17 views OK as admin (0 failures); 11 spot-checked OK.
+- **Activity API filters**: `?from=2026-10-01&to=2026-10-31` → 200; `?user=admin@taupower.in` → 200.
+- **Gating audit**: `bun run scripts/audit-gating.ts` → "All mutating routes are gated" (29/29), exit 0.
+- **Profile page verified**: renders with identity card (Plant Admin, admin@taupower.in, Administrator, User ID, ACTIVE) + Change password button + "Recent activity by you" section. VLM confirmed clean layout.
+- **Change-password UX verified**: eye-toggle buttons per field, strength meter shows "Good" on "Test123!", disabled Save state.
+- **Activity feed**: "Export CSV" button + module filter chips present in drawer.
+- dev.log: clean compilation, no errors.
+
+## Unresolved issues / risks + next-phase priorities
+- **GET routes still open** — reads (GET) remain ungated (app shell gated; fine for prototype). Party-scoped read authz is a larger future scope.
+- **Activity feed date inputs** not yet visually verified via VLM (screenshot taken but not assessed in detail) — minor.
+- **Recurring webDevReview cron (id 450167)** is active and triggered this round.
+- Next-phase recommendations:
+  1. Party-scoped data access (customer sees only their SOs/invoices) — requires per-record authz + party-linked user accounts.
+  2. Dashboard "signed in as" greeting + last-login timestamp on the profile page.
+  3. Wire the gating audit script into a pre-commit/CI hook as a regression guard.
+  4. Notification preferences / email-digest of activity (larger scope).

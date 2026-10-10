@@ -16,6 +16,17 @@ type Analytics = {
 
 const AGEING_COLORS = ["var(--chart-1)", "var(--chart-4)", "var(--chart-2)", "var(--chart-5)"];
 
+/** Theme-aware recharts Tooltip — adapts to dark mode via CSS variables. */
+const TOOLTIP_STYLE = {
+  borderRadius: 8,
+  fontSize: 12,
+  background: "var(--popover)",
+  color: "var(--popover-foreground)",
+  border: "1px solid var(--border)",
+} as const;
+
+const CHART_CURSOR = { fill: "var(--muted)", fillOpacity: 0.5 } as const;
+
 export default function AnalyticsPage() {
   const { data, isLoading } = useApi<Analytics>("/api/analytics");
   if (isLoading || !data) return <Skeleton className="h-64" />;
@@ -46,11 +57,11 @@ export default function AnalyticsPage() {
           {data.oee.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.oee} margin={{ left: -16, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.35} vertical={false} />
                 <XAxis dataKey="station" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
-                <Bar dataKey="oee" name="OEE %" radius={[3, 3, 0, 0]}><Cell fill="var(--chart-1)" /></Bar>
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
+                <Bar dataKey="oee" name="OEE %" radius={[3, 3, 0, 0]} cursor="pointer"><Cell fill="var(--chart-1)" /></Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : <Empty>No scans yet</Empty>}
@@ -60,13 +71,13 @@ export default function AnalyticsPage() {
           {data.fpyByProduct.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.fpyByProduct} margin={{ left: -16, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.35} vertical={false} />
                 <XAxis dataKey="line" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="good" name="Good" stackId="a" fill="var(--chart-1)" />
-                <Bar dataKey="reject" name="Rejected" stackId="a" fill="var(--chart-5)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="good" name="Good" stackId="a" fill="var(--chart-1)" cursor="pointer" />
+                <Bar dataKey="reject" name="Rejected" stackId="a" fill="var(--chart-5)" radius={[3, 3, 0, 0]} cursor="pointer" />
               </BarChart>
             </ResponsiveContainer>
           ) : <Empty>No completed orders</Empty>}
@@ -79,11 +90,11 @@ export default function AnalyticsPage() {
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ageingData} margin={{ left: -16, right: 8, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.35} vertical={false} />
               <XAxis dataKey="bucket" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v: number) => inr2(v)} />
-              <Bar dataKey="value" name="Value" radius={[3, 3, 0, 0]}>{ageingData.map((_, i) => <Cell key={i} fill={AGEING_COLORS[i]} />)}</Bar>
+              <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} formatter={(v: number) => inr2(v)} />
+              <Bar dataKey="value" name="Value" radius={[3, 3, 0, 0]} cursor="pointer">{ageingData.map((_, i) => <Cell key={i} fill={AGEING_COLORS[i]} />)}</Bar>
             </BarChart>
           </ResponsiveContainer>
         </SectionCard>
@@ -120,7 +131,7 @@ export default function AnalyticsPage() {
         bodyClassName="overflow-x-auto scroll-thin"
       >
         {data.orderBook.length === 0 ? <Empty>No open orders</Empty> : (
-          <table className="zebra w-full text-sm">
+          <table className="zebra w-full text-sm table-compact">
             <thead>
               <tr className="text-xs text-muted-foreground border-b">
                 <th className="text-left font-medium px-5 py-2">SO</th>

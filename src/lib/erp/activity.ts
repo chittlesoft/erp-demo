@@ -127,20 +127,44 @@ export async function logActivityBy(
 }
 
 /**
- * List recent activity, newest first. Optional module filter. Limit clamped
- * to a safe max of 200. Triggers `seedActivity()` if the table is empty so
- * the timeline is never blank on a fresh database.
+ * List recent activity, newest first. Optional filters:
+ *   - `module` — restrict to a single module ("all"/undefined = no filter)
+ *   - `from`    — ISO date or date-time string; rows with `ts >= from` are kept.
+ *                 A bare date (YYYY-MM-DD) is normalised to start-of-day UTC.
+ *   - `to`      — ISO date or date-time string; rows with `ts <= to` are kept.
+ *                 A bare date (YYYY-MM-DD) is normalised to end-of-day UTC.
+ *   - `user`    — email (or "system") to filter by the `user` column exactly.
+ *
+ * Limit is clamped to a safe max of 200. Triggers `seedActivity()` if the table
+ * is empty so the timeline is never blank on a fresh database.
  */
-export async function listActivity(limit = 50, module?: string): Promise<ActivityLogRow[]> {
+export async function listActivity(
+  limit = 50,
+  module?: string,
+  from?: string,
+  to?: string,
+  user?: string,
+): Promise<ActivityLogRow[]> {
   // Lazy seed on first read so the feed has content out of the box.
   const countRows = await db.$queryRaw<{ c: bigint | number }[]>`SELECT COUNT(*) as c FROM activity_logs`;
   const count = Number(countRows[0]?.c ?? 0);
   if (count === 0) await seedActivity();
 
   const take = Math.max(1, Math.min(200, Math.floor(limit)));
-  const where = module && module !== "all"
-    ? Prisma.sql`WHERE module = ${module}`
+
+  // Compose the optional WHERE clauses with parameterised raw SQL so every
+  // user-supplied value is bound (no string concatenation → no SQL injection).
+  // Date-only inputs (YYYY-MM-DD) are normalised to full UTC timestamps so a
+  // single-day "to" picks up the entire day, not just midnight.
+  const conds: Prisma.Sql[] = [];
+  if (module && module !== "all") conds.push(Prisma.sql`module = ${module}`);
+  if (user) conds.push(Prisma.sql`user = ${user}`);
+  if (from) conds.push(Prisma.sql`ts >= ${normaliseFrom(from)}`);
+  if (to) conds.push(Prisma.sql`ts <= ${normaliseTo(to)}`);
+  const where = conds.length > 0
+    ? Prisma.sql`WHERE ${Prisma.join(conds, " AND ")}`
     : Prisma.empty;
+
   const rows = await db.$queryRaw<ActivityLogDb[]>`
     SELECT id, ts, module, action, refType, refId, refIdInt, title, detail, user
     FROM activity_logs
@@ -149,6 +173,18 @@ export async function listActivity(limit = 50, module?: string): Promise<Activit
     LIMIT ${take}
   `;
   return rows.map(toRow);
+}
+
+/** Date normaliser — bare YYYY-MM-DD inputs become start-of-day UTC. */
+function normaliseFrom(s: string): string {
+  const trimmed = s.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T00:00:00.000Z` : trimmed;
+}
+
+/** Date normaliser — bare YYYY-MM-DD inputs become end-of-day UTC. */
+function normaliseTo(s: string): string {
+  const trimmed = s.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T23:59:59.999Z` : trimmed;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

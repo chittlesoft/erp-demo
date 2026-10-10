@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { ROLE_LABEL, asRole, isAdmin, type Role } from "@/lib/erp/auth-shared";
+import { useNav } from "@/lib/erp/nav";
 import { ChangePasswordDialog } from "./change-password";
 
 function initials(name?: string | null): string {
@@ -28,6 +29,7 @@ function initials(name?: string | null): string {
 export function UserMenu() {
   const { data: session } = useSession();
   const { toast } = useToast();
+  const go = useNav((s) => s.go);
   const [reseeding, setReseeding] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
 
@@ -86,7 +88,14 @@ export function UserMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={(e) => { e.preventDefault(); setPwOpen(true); }}
+          onSelect={() => go("profile")}
+          className="cursor-pointer"
+        >
+          <UserCircle2 className="h-4 w-4" />
+          <span>My profile</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => setPwOpen(true)}
           className="cursor-pointer"
         >
           <KeyRound className="h-4 w-4" />

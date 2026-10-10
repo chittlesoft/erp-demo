@@ -36,7 +36,7 @@ export default function ProductionPage() {
       <div className="rounded-xl border bg-card shadow-xs">
         <div className="overflow-x-auto scroll-thin">
           {isLoading ? <div className="p-4 space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9" />)}</div> : (orders ?? []).length === 0 ? <Empty>No orders</Empty> : (
-            <table className="zebra w-full text-sm">
+            <table className="zebra w-full text-sm table-compact">
               <thead><tr className="text-xs text-muted-foreground border-b">
                 {["Order", "Product", "Qty", "Good", "Rej", "Due", "Status", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${(i >= 2 && i <= 5) ? "text-right" : "text-left"}`}>{h}</th>)}
               </tr></thead>

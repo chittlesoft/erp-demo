@@ -99,13 +99,22 @@ export default function DashboardPage() {
           {chart.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chart} margin={{ left: -16, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.25} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
                 <XAxis dataKey="line" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} cursor={{ fill: "var(--muted)" }} />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: 8,
+                    fontSize: 12,
+                    background: "var(--popover)",
+                    color: "var(--popover-foreground)",
+                    border: "1px solid var(--border)",
+                  }}
+                  cursor={{ fill: "var(--muted)", fillOpacity: 0.5 }}
+                />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="good" name="Good" stackId="a" fill="var(--chart-1)" />
-                <Bar dataKey="reject" name="Rejected" stackId="a" fill="var(--chart-5)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="good" name="Good" stackId="a" fill="var(--chart-1)" cursor="pointer" />
+                <Bar dataKey="reject" name="Rejected" stackId="a" fill="var(--chart-5)" radius={[3, 3, 0, 0]} cursor="pointer" />
               </BarChart>
             </ResponsiveContainer>
           ) : (

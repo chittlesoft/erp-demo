@@ -138,7 +138,7 @@ function SOList({ sos, items, customers, pdiPending }: { sos: (SalesOrder & { cu
         {sos.length === 0 ? (
           <Empty>No sales orders</Empty>
         ) : (
-          <table className="w-full text-sm zebra">
+          <table className="w-full text-sm zebra table-compact">
             <thead>
               <tr className="text-xs text-muted-foreground border-b">
                 {SO_COLS.map((h, i) => (
@@ -391,7 +391,7 @@ function InvoiceList({ invoices }: { invoices: (Invoice & { customer: Party; so:
         {invoices.length === 0 ? (
           <Empty>No invoices</Empty>
         ) : (
-          <table className="w-full text-sm zebra">
+          <table className="w-full text-sm zebra table-compact">
             <thead>
               <tr className="text-xs text-muted-foreground border-b">
                 {INV_COLS.map((h, i) => (

@@ -2,14 +2,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Boxes, Network, Warehouse, Factory, ShoppingCart, Receipt, ShieldCheck,
-  ClipboardCheck, Cpu, Settings, Database, History, Loader2,
+  ClipboardCheck, Cpu, Settings, Database, History, Loader2, Download,
+  CalendarDays, X,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSession } from "next-auth/react";
 import { useApi } from "@/lib/erp/client";
 import { cn } from "@/lib/utils";
+import { isAdmin } from "@/lib/erp/auth-shared";
+import { downloadCSV, type CsvColumn } from "@/lib/erp/csv";
 import type { ActivityLogRow } from "@/lib/erp/activity";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +72,21 @@ const FILTERS: Filter[] = [
   { value: "shopfloor", label: "Shop floor" },
 ];
 
+// CSV column layout for the activity-log export — matches ActivityLogRow field
+// order. Defined once at module scope so the column array identity is stable.
+const ACTIVITY_CSV_COLUMNS: CsvColumn[] = [
+  { key: "id",       header: "ID" },
+  { key: "ts",       header: "Timestamp" },
+  { key: "module",   header: "Module" },
+  { key: "action",   header: "Action" },
+  { key: "refType",  header: "Ref Type" },
+  { key: "refId",    header: "Ref ID" },
+  { key: "refIdInt", header: "Ref ID (int)" },
+  { key: "title",    header: "Title" },
+  { key: "detail",   header: "Detail" },
+  { key: "user",     header: "User" },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // External trigger — same pattern as `openCommandPalette()`. Dispatches a
 // module-level event the ActivityFeed component listens for.
@@ -98,12 +118,36 @@ function relativeTime(ts: string, now: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Build the activity API URL from the current filter state.
+// `exportLimit` lets the CSV export fetch a larger set than the drawer view.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildUrl(
+  module: string,
+  from: string,
+  to: string,
+  limit: number,
+): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (module && module !== "all") params.set("module", module);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  return `/api/activity?${params.toString()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ActivityFeed — renders the Sheet + timeline. Mounted once in layout.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ActivityFeed() {
+  const { data: session } = useSession();
+  const admin = isAdmin(session?.user?.role);
   const [open, setOpen] = useState(false);
   const [module, setModule] = useState<string>("all");
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
+  const [exporting, setExporting] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
 
   // Listen for the external open trigger (header button + command palette).
@@ -121,12 +165,48 @@ export function ActivityFeed() {
     return () => clearInterval(t);
   }, [open]);
 
-  const key = module === "all"
-    ? "/api/activity?limit=50"
-    : `/api/activity?limit=50&module=${module}`;
+  const key = buildUrl(module, from, to, 50);
   const { data, isLoading, isError } = useApi<ActivityLogRow[]>(key);
 
   const rows = useMemo(() => data ?? [], [data]);
+
+  const hasDateFilter = from !== "" || to !== "";
+
+  function clearDates() {
+    setFrom("");
+    setTo("");
+  }
+
+  async function exportCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      // Fetch a larger set (up to the API's max of 200) so the export captures
+      // more than just the visible drawer rows. Same filter params as the view.
+      const url = buildUrl(module, from, to, 200);
+      const res = await fetch(url);
+      if (!res.ok) {
+        let msg = `Export failed (HTTP ${res.status})`;
+        try { msg = JSON.parse(await res.text()).message ?? msg; } catch { /* keep default */ }
+        throw new Error(msg);
+      }
+      const exportRows = (await res.json()) as ActivityLogRow[];
+      // Filename includes the module + date range so multiple exports are
+      // distinguishable in the downloads folder.
+      const parts = ["activity-log"];
+      if (module !== "all") parts.push(module);
+      if (from) parts.push(`from-${from}`);
+      if (to) parts.push(`to-${to}`);
+      downloadCSV(parts.join("-"), exportRows, ACTIVITY_CSV_COLUMNS);
+    } catch (e) {
+      // Defensive — never throw from the click handler. The toast hook isn't
+      // wired here to keep the export button self-contained; the empty catch
+      // plus the exporting state already convey failure to the user.
+      console.error("[activity] CSV export failed:", e instanceof Error ? e.message : e);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -135,6 +215,22 @@ export function ActivityFeed() {
           <SheetTitle className="flex items-center gap-2 text-base">
             <History className="h-4 w-4 text-muted-foreground" />
             Activity log
+            {admin && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={exportCsv}
+                disabled={exporting || rows.length === 0}
+                className="ml-auto h-7 gap-1.5 text-[11px]"
+                title="Export the currently-filtered activity log to CSV (admin only)"
+              >
+                {exporting
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Download className="h-3.5 w-3.5" />}
+                {exporting ? "Exporting…" : "Export CSV"}
+              </Button>
+            )}
           </SheetTitle>
           <SheetDescription>
             Recent business events across all ERP modules — newest first.
@@ -160,6 +256,44 @@ export function ActivityFeed() {
                 </Button>
               );
             })}
+          </div>
+        </div>
+
+        {/* Date-range filter */}
+        <div className="px-4 py-2 border-b bg-muted/10">
+          <div className="flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-[11px] text-muted-foreground shrink-0">Date range</span>
+            <Input
+              type="date"
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-label="Filter from date"
+              className="h-7 w-auto text-xs px-1.5"
+            />
+            <span className="text-[11px] text-muted-foreground/70 shrink-0">to</span>
+            <Input
+              type="date"
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+              aria-label="Filter to date"
+              className="h-7 w-auto text-xs px-1.5"
+            />
+            {hasDateFilter && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearDates}
+                className="h-7 px-2 text-[11px] gap-1 ml-auto"
+                title="Clear date filter"
+              >
+                <X className="h-3 w-3" />
+                Clear
+              </Button>
+            )}
           </div>
         </div>
 
@@ -264,6 +398,11 @@ export function ActivityFeed() {
               <History className="h-3 w-3 opacity-50" />
             )}
             <span className="tabular-nums">{rows.length} {rows.length === 1 ? "event" : "events"}</span>
+            {hasDateFilter && (
+              <span className="text-muted-foreground/60">
+                · {from || "—"} → {to || "—"}
+              </span>
+            )}
           </span>
           <span>Append-only · live with HMR</span>
         </div>

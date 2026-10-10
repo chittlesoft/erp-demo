@@ -1,0 +1,202 @@
+   710→- `inventory.tsx`: gated "Transfer / QC release" button (kept the read-only ExportButton).
+   711→- `warehouse.tsx`: gated "Put away" button (read-only bin map + awaiting put-away tables remain visible).
+   712→- `accounts.tsx`: gated the Company profile "Save" button with `isAdmin` (not just `canEdit`), per task spec — operators and viewers cannot save company settings; the form fields remain visible (read-only by convention since there's no Save).
+   713→- `jobwork.tsx`: no mutating buttons exist in the current page (it's informational — rule summary + read-only job-workers table). No gating needed; left the file unchanged to minimise risk.
+   714→
+   715→### 5. Verification
+   716→- Before running lint, smoke-tested the dev server (alive at that point): `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/` → 200; `curl -s http://localhost:3000/api/users` (no session cookie) → HTTP 403 with body `{"message":"Administrator access required"}` — admin-only server-side gating confirmed.
+   717→- dev.log showed Turbopack recompiling cleanly across every edit: multiple `✓ Compiled in NNNms` lines, `GET / 200 in 140ms`, `GET /api/users 403 in 11ms`. No `Failed to compile`, `Module not found`, `Type error`, or `SyntaxError` lines attributed to my files.
+   718→- Ran `npx eslint --no-error-on-unmatched-pattern` on all 16 NEW/MODIFIED files (excluding layout.tsx + shopfloor.tsx, which have PRE-EXISTING `react-hooks/set-state-in-effect` patterns from before this task — worklog 3-b noted those). All my non-layout files pass lint cleanly (exit 0, no errors).
+   719→- For `users.tsx` specifically: initially had a `useEffect` syncing form state to props which tripped `react-hooks/set-state-in-effect`; refactored to the keyed-`UserForm` pattern (form remounts on each open via `key={user?.id ?? "new"}` and reads initial state from `useState` initialisers) so no useEffect is needed. Lint now clean on that file too.
+   720→
+   721→### Note on dev server status at end of task
+   722→- After all edits + verifications succeeded, the system OOM-killer reaped the dev server process (pid 1007 in `.zscripts/dev.pid`) when `bun run lint` ran out of memory on the full project — `dmesg` shows `Out of memory: Killed process 2287 (MainThread) total-vm:13033132kB, anon-rss:3165740kB`. This was a system-level OOM event, not a compile error in any of my files. Per the task constraint "do NOT restart, do NOT run `bun run dev`", I did NOT restart the dev server. The verification logs above (HTTP 200 / HTTP 403 / `✓ Compiled`) were captured BEFORE the OOM event and demonstrate that all my edits compiled cleanly and the admin gating works. The next agent/orchestrator should restart the dev server via `.zscripts/dev.sh` if needed for further QA.
+   723→
+   724→Stage Summary:
+   725→- New files (4): `src/app/api/users/route.ts`, `src/app/api/users/[id]/route.ts`, `src/components/erp/pages/users.tsx`. No new npm packages; only existing shadcn components (`AlertDialog`, `Dialog`, `Switch`, `Select`, `Badge`, `Skeleton`, `Button`, `Input`, `Label`), existing lucide icons (`UserCog`, `ShieldCheck`, `ShieldAlert`, `Plus`, `Pencil`, `Trash2`, `UserCog`), existing hooks (`useApi`, `useAction`, `useSession`), and existing auth helpers (`asRole`, `canEdit`, `isAdmin`, `ROLE_LABEL`). All new client components start with `"use client"`.
+   726→- Modified files (13): `src/lib/erp/nav.ts` (added `"users"` to View union), `src/app/page.tsx` (Users dynamic import + view switch), `src/components/erp/layout.tsx` (adminOnly NAV field + Users nav button + admin gating), and 10 page modules gated for viewer role (items, sales, purchase, production, quality, shopfloor, bom, parties, inventory, warehouse, accounts). jobwork.tsx untouched — informational only.
+   727→- Defense-in-depth: UI gating hides mutating buttons from viewers AND the new user management API routes enforce admin-only server-side (403 if no session or non-admin role). The user management page additionally renders an "Administrator access required" message if a non-admin somehow reaches it via deep-link.
+   728→- `accounts.tsx` Save button is admin-only (not just canEdit), per task spec — operators and viewers can edit the input fields but cannot save (no Save button visible). Form fields stay visible for read-only inspection.
+   729→- ESLint: clean on all 14 of my non-layout/non-shopfloor files (exit 0). The 3 remaining `react-hooks/set-state-in-effect` errors in `layout.tsx` (lines 65-66) and `shopfloor.tsx` (line 68) are PRE-EXISTING patterns — worklog 3-b explicitly noted the layout.tsx ones as pre-existing. My edits to those files did not touch those `useEffect` lines.
+   730→- Dev server: was alive and verified working (`GET / 200`, `GET /api/users 403`) before the system OOM-killer reaped it during a full-project `bun run lint` run. I did NOT restart it per the task constraint. All my edits had already recompiled cleanly via Turbopack HMR before the OOM.
+   731→
+   732→---
+   733→Task ID: 9 (webDevReview round 5)
+   734→Agent: orchestrator (main)
+   735→Task: Cron-triggered review — assess status, QA via agent-browser, add UI role gating + user management + PDI print CSS + styling polish.
+   736→
+   737→## Current project status / assessment
+   738→- Dev server stable on :3000 via `.zscripts/dev.sh`.
+   739→- agent-browser QA: all 17 nav views render with **0 failures** (16 original + new User management).
+   740→- All core APIs + NextAuth endpoints return 200; `/api/users` correctly returns 403 without admin session.
+   741→- **No app bugs found this round**. QA noted the agent-browser `click` command was being intercepted by the Next.js dev-overlay badge (a tooling issue, not an app bug — JS `element.click()` works fine, confirmed all 17 views render).
+   742→- Confirmed the prior round's flagged gap: viewers could still see/click New/Edit/Dispatch buttons (UI not gated).
+   743→
+   744→## Goals / completed modifications / verification
+   745→
+   746→### Phase A — UI role gating + user management (Task 9-a, full-stack-developer)
+   747→- **UI role gating for viewers**: 10 page modules gated with `useSession()` + `canEdit(asRole(...))` / `isAdmin(...)`: items (New/Edit), sales (New SO/Dispatch), purchase (New PO/GRN/Indent), production (New/Start/Release/Complete), quality (New inspection/Edit plan/Inspect), bom (Add/Delete), parties (New/Edit), inventory (Transfer), warehouse (Put away), accounts (Save — admin-only via `isAdmin`). Shopfloor scan terminal gated behind `canMutate`; viewers see "Scan terminal — operators only" message (board/KPIs stay read-only).
+   748→- **User management page** (`src/components/erp/pages/users.tsx`): admin-only page with SectionCard-framed `.zebra` user table (name/email/role badge/active pill/Edit/Delete), New-user + Edit dialogs (keyed `UserForm` via `useState` initializers — no `useEffect` to avoid lint warnings), AlertDialog delete confirmation, defense-in-depth "Administrator access required" gate, self-delete disabled.
+   749→- **User management API** (`src/app/api/users/route.ts` + `[id]/route.ts`): GET list + POST create + PATCH update + DELETE, all admin-only via `getServerSession(authOptions)` (returns 403 otherwise). Raw SQL (`$queryRaw`/`$executeRaw`). Email regex + uniqueness + password ≥6 validation. Hashes via `hashPassword`. Logs activity.
+   750→- **Nav wiring**: added `"users"` to `View` union; `page.tsx` dynamic import + view switch; `layout.tsx` added `adminOnly?: boolean` to NAV entry type + `UserCog` icon + "User management" button in Accounts group, rendered only for admins via `NAV.filter((n) => !n.adminOnly || admin)`.
+   751→
+   752→### Phase B — PDI print CSS + styling polish (Task 9-b, frontend-styling-expert)
+   753→- **`globals.css` print CSS**: refined `@page { margin: 14mm 12mm }`; added `.print-only` (screen-none, print-block), `.print-page-break` (forced page break), global `thead { display: table-header-group }` + `tr { break-inside: avoid }` in `@media print` (multi-page tables repeat headers), `.pdi-report` scoped print sizing (fills A4 page).
+   754→- **`pdi-report-view.tsx`**: A4 print layout — DialogContent fills page in print, `.print-area` body scrolls on screen/static in print, prominent result banner (emerald ACCEPTED / rose REJECTED with PDI no.), dense `.table-compact` readings table with right-aligned tabular-nums + color-coded OK (emerald-700)/NG (rose-700), `.print-only` footer with TPE/IMS/FR/78 + print timestamp + page placeholder, header + Print/Close buttons always accessible.
+   755→- **`pdi-inspection-dialog.tsx`**: sticky first 4 columns (characteristic/spec stay visible when scrolling sample columns) via `<colgroup>` + `sticky left-*` with opaque bg + border-r separators, per-row emerald ✓/rose ✗/muted − indicator, live "Preview: ACCEPTED/REJECTED" banner, `max-h-[62vh]` scroll body with sticky Save/Cancel footer.
+   756→- **`pdi-plan-dialog.tsx`**: `<colgroup>` responsive `min()` widths, clean `grid grid-cols-[1fr_1fr_1fr_3.5rem]` for nominal/tol-/tol+/unit alignment + aria-labels, subtle danger hover on remove-row, "X characteristic(s)" count, `max-h-[62vh]` scroll body.
+   757→- **`planning.tsx`**: wrapped requirements table in `SectionCard` (title + subtitle + summary right-slot), preserved `.zebra`/`.row-warn`/tabular-nums/AlertTriangle.
+   758→- **`trace.tsx`**: replaced ad-hoc wrappers with `SectionCard` for both tabs (with subtitles), preserved `.zebra`/tabular-nums/status badges/lookup logic.
+   759→- **`analytics.tsx`**: minor touch-ups — chart gridlines strokeOpacity 0.25→0.3, order-book header padding unified to `py-2`.
+   760→
+   761→### Verification results
+   762→- agent-browser QA: all 17 views OK as admin (0 failures).
+   763→- **Role gating verified**: logged in as viewer (session role "viewer") → "User management" nav button hidden ✓, Items page "New item"+"Edit" buttons hidden (only "Export CSV"+"Quick view" remain) ✓, Sales page "New SO"+"Dispatch" hidden ✓. VLM confirmed viewer items page is correctly read-only.
+   764→- **User management page verified**: admin sees "User management" nav → page lists 3 users (Plant Admin (you)/Shop Operator/Read-only Viewer) with email, role badge (ADMINISTRATOR/SHOP OPERATOR), ACTIVE status, Edit + Delete buttons (self-delete disabled). VLM confirmed clean table + correct actions.
+   765→- **Users API gating**: `GET /api/users` (no session) → 403 `{"message":"Administrator access required"}` ✓.
+   766→- dev.log: clean compilation, no errors.
+   767→
+   768→## Unresolved issues / risks + next-phase priorities
+   769→- **Server-side API gating still partial** — only `/api/users/*` is server-gated (admin-only). Other mutating routes (items/sales/purchase/production/quality/seed) are still open server-side (UI gating is client-only; a determined user could POST directly). A future round should add `getServerSession` to all mutating routes + record `session.user.email` in `logActivity`.
+   770→- **Activity log `user` field is still "system"** — logActivity doesn't know the session. Wiring getServerSession into routes (above) would enable per-user attribution.
+   771→- **Recurring webDevReview cron (id 450167)** is active and triggered this round.
+   772→- Next-phase recommendations:
+   773→  1. Server-side API gating: add `getServerSession` to all mutating `/api/**` routes (POST/PATCH/DELETE); gate seed to admin; record `session.user.email` in logActivity so the activity feed shows who did what.
+   774→  2. Audit-trail detail: surface the acting user in the activity feed + dashboard widget (now that sessions exist).
+   775→  3. PDI: wire the `pdi.assert`/`pdi.link` gate into the sales dispatch flow is DONE (round 7-a); consider a "PDI required" indicator on the Sales SO line rows so operators see the gate before dispatching.
+   776→  4. Consider a "My profile" / change-password flow for non-admin users.
+   777→
+   778→---
+   779→Task ID: 10-b
+   780→Agent: full-stack-developer
+   781→Task: Round 6 webDevReview — add PDI-required indicator on Sales SO lines + add a change-password profile flow + surface the acting user in the activity widget/feed (parallel run with API-gating agent 10-a, files kept disjoint).
+   782→
+   783→Work Log:
+   784→- Read worklog tasks 1-9 + prior-round context (PDI module, activity log `user` field still defaulting to "system", users.ts `hashPassword`/`findUserByCredentials` pattern, NextAuth v4 session shape with `session.user.email` + `session.user.id`).
+   785→- Read all files in my owned list: `sales.tsx`, `user-menu.tsx`, `activity-widget.tsx`, `activity-feed.tsx`, `dashboard.tsx`. Also read `users.ts`, `auth.ts`, `pdi.ts`, `pdi-shared.ts`, `api.ts`, `users/route.ts`, `users/[id]/route.ts` for pattern reference + `pending`/`plans` API route bodies.
+   786→- Verified `activity-feed.tsx` ALREADY had the `· by {row.user}` meta-line logic at lines 243-247 (hidden when `user === "system"`) — left that file unchanged since it satisfies the task.
+   787→- Created `src/app/api/auth/change-password/route.ts` (NEW): standalone `POST` handler (not the `api()` wrapper, so the session check short-circuits before seeding). Validates NextAuth session → 401 if missing. Validates `newPassword.length >= 6` → 400 otherwise. Verifies `currentPassword` via `findUserByCredentials(session.user.email, currentPassword)` → 400 "Current password is incorrect" otherwise (also enforces `active = 1`). Updates via `db.$executeRaw\`UPDATE users SET password = ${hashPassword(newPassword)} WHERE id = ${Number(session.user.id)}\`` (raw SQL pattern, avoids Prisma client staleness). Logs `logActivity({ module: "settings", action: "update", refType: "user", refId: email, refIdInt: userId, title: "Password changed", detail: "User X changed their password", user: email })` so the audit trail records the acting user (will surface in the activity widget/feed once 10-a's session-wiring lands). Returns `{ ok: true }`.
+   788→- Created `src/components/erp/change-password.tsx` (NEW `"use client"` Dialog): three password inputs (current / new / confirm), `KeyRound` icon header, client-side validation (`mismatch` + `tooShort` for new < 6 chars, `canSubmit` gate), `useEffect` clears fields on open so stale values don't carry over, `aria-invalid` hints, inline error messages under the inputs, POSTs to `/api/auth/change-password`, toast on success ("Password changed — use the new password next time you sign in.") / error, closes on success. Uses only existing shadcn Dialog/Input/Label/Button + lucide `Loader2`/`KeyRound` + the existing `useToast` hook — no new npm packages.
+   789→- Modified `src/components/erp/user-menu.tsx`: added `KeyRound` to lucide imports, `import { ChangePasswordDialog } from "./change-password"`, added `const [pwOpen, setPwOpen] = useState(false)`, added a "Change password" `DropdownMenuItem` (with `KeyRound` icon + `e.preventDefault()` to keep the menu open while the dialog opens) placed between the Role badge block and the admin-only "Reload demo data" item — available to ALL authenticated users (not just admin). Wrapped the return JSX in a Fragment `<>...</>` to mount the `<ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />` alongside the `<DropdownMenu>`.
+   790→- Modified `src/components/erp/pages/sales.tsx`: added `ClipboardCheck` to lucide imports, `import type { PendingRow } from "@/lib/erp/pdi-shared"`, added a new "PDI" column to `SO_COLS` (between "Status" and the action column), fetched `useApi<PendingRow[]>("/api/phase3/pdi/pending")` in `SalesPage`, passed `pdiPending` through to `SOList`. New `PdiIndicator` component: filters pending rows by `soId`, sums `pending` / `covered` / `toInspect`; if `toInspect <= 1e-6` shows emerald "PDI ✓" badge with title "PDI accepted qty covers the dispatch requirement (N of M units accepted)", else amber "PDI {covered}/{pending}" with title "N units still need accepted PDI before dispatch (covered X / needed Y)". Renders nothing for SOs with no PDI pending rows (parts without a plan, or fully dispatched). The Dispatch button + server-side `pdi.assert` gate are untouched — the badge is purely informational so operators see the gate before clicking Dispatch.
+   791→- Modified `src/components/erp/activity-widget.tsx`: appended `· by {row.user}` (muted, `/70`) to the entry's secondary line, hidden when `user === "system"` (per spec — reduce noise until 10-a's session-wiring lands). When `row.detail` exists, the "·" separator is included; when only `user` is set (no detail), it reads "by X". Compact layout preserved (single truncate line).
+   792→- `src/components/erp/pages/dashboard.tsx`: per the task's "only if it reads naturally, if unsure skip" guidance, left unchanged — the activity widget already surfaces the user attribution + the user-menu already shows identity/role in the header. The dashboard change was deemed unnecessary noise.
+   793→- Caught + fixed a JSX parse error in my first edit to `user-menu.tsx`: returned two root elements (`<DropdownMenu>` + `<ChangePasswordDialog>`) which Turbopack rejected ("Expected ',', got 'open'"). Wrapped the return in a Fragment `<>...</>` — `GET /` immediately back to 200.
+   794→- Ran `npx eslint --max-warnings=0` on all 5 of my NEW/MODIFIED files (change-password.tsx, user-menu.tsx, route.ts, activity-widget.tsx, sales.tsx) — exit 0, no errors, no warnings.
+   795→- Verification curls: `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/` → **200**; `curl -s -X POST -H "Content-Type: application/json" -d '{"currentPassword":"admin123","newPassword":"newpass"}' http://localhost:3000/api/auth/change-password` → **401** with body `{"message":"Sign-in required"}`. Edge cases (empty body, too-short new password) → also 401 (short-circuits at the session check before validation). `/api/phase3/pdi/pending` → 200 with the expected rows (soId 21 has 2 lines, both `covered == pending`, `toInspect == 0` → the sales page will show "PDI ✓" for that SO).
+   796→- Confirmed dev.log shows clean Turbopack recompiles across every edit: `✓ Compiled in 364ms` after the Fragment fix, `POST /api/auth/change-password 401 in 233ms (compile: 219ms, render: 14ms)` (the new route compiled cleanly on first hit), multiple `GET / 200` requests. No `⨯` / `Failed to compile` / `Module not found` / `Type error` / `SyntaxError` lines attributed to my files in the post-fix tail of dev.log.
+   797→
+   798→Stage Summary:
+   799→- New files (2): `src/app/api/auth/change-password/route.ts` (standalone NextResponse-based POST, no `api()` wrapper, session-gated 401, raw-SQL password update matching users.ts, logs activity with the acting user's email), `src/components/erp/change-password.tsx` (client Dialog with 3 password inputs + client-side validation + toast feedback, no new npm deps — only existing shadcn Dialog/Input/Label/Button + lucide Loader2/KeyRound + useToast). Both start with `"use client"` / appropriate server-side imports.
+   800→- Modified files (3): `src/components/erp/user-menu.tsx` (Fragment-wrapped return with the ChangePasswordDialog mounted alongside the DropdownMenu, "Change password" menu item available to ALL authenticated users), `src/components/erp/pages/sales.tsx` (new "PDI" column + PdiIndicator component cross-referencing `/api/phase3/pdi/pending` — emerald ✓ when fully covered, amber `{covered}/{pending}` when still required), `src/components/erp/activity-widget.tsx` (appends `· by {user}` to the entry secondary line, hidden when user === "system").
+   801→- Unchanged files (per task): `src/components/erp/activity-feed.tsx` (already had the user meta-line logic), `src/components/erp/pages/dashboard.tsx` (skipped the optional greeting per task guidance). All files outside my owned list (api.ts, activity.ts, all other API routes, all other pages, layout.tsx, schema.prisma, etc.) left untouched — 10-a's parallel API-gating work is unaffected.
+   802→- Defense-in-depth preserved: the existing server-side `pdi.assert` dispatch gate (`/api/sales/invoices/create`) still blocks the actual invoice when PDI coverage is insufficient; the new sales-row badge is purely informational. The change-password API enforces server-side auth (401 without session) AND verifies the current password before updating (so a stolen session cookie alone cannot change the password).
+   803→- ESLint: clean on all 5 of my files (exit 0, no errors, no warnings). Pre-existing `react-hooks/set-state-in-effect` lint warnings in layout.tsx + shopfloor.tsx (worklog 3-b/8-b) are in files I do NOT own — untouched.
+   804→- Dev server: still running stably on :3000 via `.zscripts/dev.sh` (never touched it, no `pkill`, no restart, no `bun run dev`). All my edits recompiled cleanly via Turbopack HMR. `GET / 200` and `POST /api/auth/change-password 401` confirmed working.
+   805→
+   806→---
+   807→Task ID: 10-a
+   808→Agent: full-stack-developer
+   809→Task: Add server-side API gating to all mutating routes (POST/PATCH/DELETE) via NextAuth `getServerSession`, gate `/api/seed` + `/api/settings` to admin, all other mutating routes to editor (admin+operator, not viewer), and record the acting user's email in the activity log.
+   810→
+   811→Work Log:
+   812→- Read worklog.md (Tasks 1-9) for context: prior round 8-b added NextAuth v4 + 3 demo roles (admin/operator/viewer) but the UI-only gating left `/api/**` mutating routes open — `POST /api/seed` returned 200 unauthenticated. Round 8-a added `logActivity()` + the `activity_logs` table; the `user` field defaulted to `"system"`.
+   813→- Read `src/lib/erp/api.ts` (the `api()` wrapper + `body()` helper — `api()` catches `ErpError` and returns `{message}` with `err.status`), `src/lib/erp/activity.ts` (`logActivity(entry)` accepts an optional `user` field defaulting to `"system"`), `src/app/api/users/route.ts` + `users/[id]/route.ts` (the existing pattern — local `requireAdmin()` calls `getServerSession(authOptions)` and throws `ErpError("Administrator access required", 403)`), `src/lib/auth.ts` (`authOptions` + the Session `user.role` augmentation), and `src/lib/erp/shared.ts` (`ErpError(msg, status=400)` class). Also enumerated every mutating route via `grep -rl "export const POST\|PATCH\|DELETE"`.
+   814→- Edited `src/lib/erp/api.ts`: kept `api()` + `body()` byte-for-byte unchanged. Added a new `AuthSession` type `{ user: { id: string; email: string; role: string } }` and five exported helpers:
+   815→  - `getSession(req?)` — wraps `getServerSession(authOptions)`, returns `AuthSession | null` (null when no session, no user, no email, or no role).
+   816→  - `requireAuth(req?)` — calls `getSession`, throws `ErpError("Sign in required", 401)` if null.
+   817→  - `requireRole(req, role)` — calls `requireAuth`, then checks a role ladder (`admin` satisfies `"operator"` requirement, mirroring the client `canEdit()` helper). Throws `ErpError("Administrator access required" | "Editor access required", 403)` if insufficient.
+   818→  - `requireAdmin(req?)` = `requireRole(req, "admin")`.
+   819→  - `requireEditor(req?)` = `requireRole(req, "operator")` (admin + operator, viewer rejected).
+   820→  The `req` parameter is accepted for symmetry with the route-handler signature but is intentionally not consulted — `getServerSession(authOptions)` reads the session cookie from request headers internally in App Router. Backward-compatible: existing callers of `api()` / `body()` are unaffected.
+   821→- Edited `src/lib/erp/activity.ts`: added `import type { AuthSession } from "@/lib/erp/api"` (type-only import → erased at compile time, no runtime circular dep — `api.ts` does not import from `activity.ts`). Added two new exports alongside the unchanged `logActivity`:
+   822→  - `activityUser(session)` returns `session?.user?.email ?? "system"`.
+   823→  - `logActivityBy(session, entry)` is a thin wrapper: `logActivity({ ...entry, user: activityUser(session) })`.
+   824→  `logActivity` itself is unchanged → existing callers that don't pass `user` (or pass `"system"`) keep working.
+   825→- Gated **admin-only routes** (requireAdmin):
+   826→  - `POST /api/seed` (reseed = admin only) — `src/app/api/seed/route.ts`
+   827→  - `PATCH /api/settings` (company settings = admin only) — `src/app/api/settings/route.ts`
+   828→  Both now also pass `user: session.user.email` via `logActivityBy(session, …)` so the activity feed attributes the reseed / settings change to the actual admin.
+   829→- Gated **editor routes** (requireEditor — admin + operator, viewer rejected) across every remaining mutating handler:
+   830→  - `POST /api/items`, `PATCH /api/items/[id]` (also pass session email to logActivityBy)
+   831→  - `POST /api/bom`, `DELETE /api/bom/[id]`
+   832→  - `POST /api/inventory/transfer`
+   833→  - `POST /api/orders` (createOrder)
+   834→  - `POST /api/orders/[id]/start` (session → logActivityBy), `POST /api/orders/[id]/release`, `POST /api/orders/[id]/complete` (session → logActivityBy), `POST /api/orders/[id]/close-floor`
+   835→  - `POST /api/sales/orders/create` (session → logActivityBy), `POST /api/sales/invoices/create` (session → logActivityBy, preserving the PDI dispatch-gate + pdiLink logic intact)
+   836→  - `POST /api/invoices/[id]/irn`
+   837→  - `POST /api/purchase/pos/create` (session → logActivityBy), `POST /api/purchase/grns/create` (session → logActivityBy), `POST /api/purchase/indents`
+   838→  - `POST /api/parties`, `PATCH /api/parties/[id]`
+   839→  - `POST /api/phase3/scan` (session → logActivityBy), `POST /api/phase3/disposition`, `POST /api/phase3/putaway`, `POST /api/phase3/iqc`, `POST /api/phase3/pdi/plans`, `POST /api/phase3/pdi/reports` (session → logActivityBy)
+   840→  Each handler calls `await requireEditor(req)` (or `requireAdmin(req)` for the two admin routes) at the very top, before any business logic. Routes that previously called `logActivity({ … })` were updated to `logActivityBy(session, { … })` so the activity log now shows the acting user's email instead of `"system"`. Routes that didn't log activity simply gain the auth gate.
+   841→- Did NOT touch: `src/app/api/auth/**` (NextAuth), `src/app/api/users/**` (already gated by 8-b), `src/app/api/activity/route.ts` (GET only). GET handlers across every module remain open (intentional — keeps read paths unauthenticated for the prototype).
+   842→- Verified the role ladder against the existing client helpers in `src/lib/erp/auth-shared.ts`: `requireEditor` matches `canEdit(role)` (admin + operator), `requireAdmin` matches `isAdmin(role)` (admin only). viewer is rejected by both.
+   843→
+   844→Stage Summary:
+   845→- **Artifacts**: `src/lib/erp/api.ts` (added 5 auth helpers + `AuthSession`/`SessionUser` types, kept `api()` + `body()` unchanged), `src/lib/erp/activity.ts` (added `activityUser()` + `logActivityBy()`, `logActivity` signature unchanged for backward compat). 24 route-handler files updated to call `requireAdmin`/`requireEditor` at the top + pass `session.user.email` into activity logging where applicable.
+   846→- **Verification** (curl, all run before the dev server went idle):
+   847→  - `GET /` → **200** ✓
+   848→  - `POST /api/seed` (no session) → **401** ✓ (was 200 before — gate now blocks it; key verification #1)
+   849→  - `POST /api/items` (no session, empty JSON) → **401** ✓ (was 500 before — gate now blocks it; key verification #2)
+   850→  - `POST /api/inventory/transfer`, `POST /api/bom`, `DELETE /api/bom/1`, `PATCH /api/items/1`, `POST /api/orders`, `POST /api/orders/1/start`, `POST /api/orders/1/release`, `POST /api/orders/1/complete`, `POST /api/orders/1/close-floor`, `POST /api/sales/orders/create`, `POST /api/sales/invoices/create`, `POST /api/invoices/1/irn`, `POST /api/purchase/pos/create`, `POST /api/purchase/grns/create`, `POST /api/purchase/indents`, `POST /api/parties`, `PATCH /api/parties/1`, `POST /api/phase3/scan`, `POST /api/phase3/disposition`, `POST /api/phase3/putaway`, `POST /api/phase3/iqc`, `POST /api/phase3/pdi/plans`, `POST /api/phase3/pdi/reports`, `PATCH /api/settings` — every one returned **401** unauthenticated ✓
+   851→  - `GET /api/items`, `GET /api/settings`, `GET /api/orders`, `GET /api/bom?parentId=1`, `GET /api/phase3/bins`, `GET /api/phase3/pdi/plans`, `GET /api/phase3/pdi/reports`, `GET /api/txns`, `GET /api/activity` — every one returned **200** (read paths remain open) ✓
+   852→  - `dev.log` shows clean Turbopack recompiles for each route (e.g. `POST /api/seed 401 in 149ms (compile: 132ms, render: 17ms)`, `POST /api/items 401 in 14ms (compile: 3ms, render: 11ms)`) — no `⨯` / `Type error` / `Module not found` from my files.
+   853→  - `bunx eslint` on my owned files: clean (no warnings, no errors).
+   854→- **Security gap closed**: an unauthenticated user can no longer POST directly to any mutating route (was 200/500; now 401). The activity feed will now attribute actions to the signed-in user's email instead of `"system"`, since routes that already called `logActivity` were migrated to `logActivityBy(session, …)`.
+   855→- **Backward compatibility**: `logActivity` + `api()` + `body()` signatures unchanged — the existing `users/**` routes (which use a local `requireAdmin()`) and the seeded activity entries that pass `user: "operator"` still work.
+   856→- **Coexistence with parallel agent 10-b**: did not touch any of 10-b's owned files (`sales.tsx`, `user-menu.tsx`, `change-password.tsx`, `dashboard.tsx`, `activity-widget.tsx`, `activity-feed.tsx`, `prisma/schema.prisma`, page components, lib/erp/* except api.ts + activity.ts). The dev.log shows `POST /api/auth/change-password 401` — 10-b's change-password route is firing its own gate (independent of mine).
+   857→
+   858→---
+   859→Task ID: 10 (webDevReview round 6)
+   860→Agent: orchestrator (main)
+   861→Task: Cron-triggered review — assess status, QA via agent-browser, add server-side API gating + per-user attribution + PDI indicator + change-password flow.
+   862→
+   863→## Current project status / assessment
+   864→- Dev server stable on :3000 via `.zscripts/dev.sh`.
+   865→- agent-browser QA: all 17 nav views render with **0 failures** (admin + viewer).
+   866→- **Security gap confirmed + fixed this round**: prior to this round, `POST /api/seed` returned 200 with no session (unauthenticated users could reseed). Now 401.
+   867→- All core APIs + NextAuth endpoints return 200; `/api/users` returns 403 without admin session.
+   868→
+   869→## Goals / completed modifications / verification
+   870→
+   871→### Phase A — Server-side API gating + user attribution (Task 10-a, full-stack-developer)
+   872→- **`src/lib/erp/api.ts`** — added auth helpers (kept `api()` + `body()` unchanged): `getSession(req)`, `requireAuth(req)` (throws 401), `requireRole(req, role)` (role ladder: admin satisfies operator), `requireAdmin(req)`, `requireEditor(req)` (admin+operator, not viewer). `AuthSession`/`SessionUser` types.
+   873→- **`src/lib/erp/activity.ts`** — added `activityUser(session)` + `logActivityBy(session, entry)` (thin wrapper injecting `session.user.email`); `logActivity` kept backward-compatible.
+   874→- **24 mutating routes gated**:
+   875→  - **Admin-only** (`requireAdmin`): `POST /api/seed`, `PATCH /api/settings`.
+   876→  - **Editor** (`requireEditor`): items POST/PATCH, bom POST/DELETE, inventory transfer, orders POST + start/release/complete/close-floor, sales orders/invoices create, invoices irn, purchase pos/grns/indents, parties POST/PATCH, phase3 scan/disposition/putaway/iqc/pdi-plans/pdi-reports.
+   877→  - Routes that already called `logActivity` migrated to `logActivityBy(session, …)` so the activity feed now shows the acting user's email.
+   878→  - GET routes left open (reads).
+   879→
+   880→### Phase B — PDI indicator + change-password (Task 10-b, full-stack-developer)
+   881→- **PDI-required indicator** (`sales.tsx`): new "PDI" column in the SO table + `PdiIndicator` component cross-referencing `/api/phase3/pdi/pending` client-side. Emerald `PDI ✓` badge when `toInspect === 0` (fully covered); amber `PDI {covered}/{pending}` badge when units still need accepted PDI. No badge for SOs whose parts have no plan. Informational (server-side `pdi.assert` gate untouched).
+   882→- **Change-password flow**: 
+   883→  - `src/app/api/auth/change-password/route.ts` (NEW): standalone POST, `getServerSession` → 401 if none, validates `newPassword.length >= 6`, verifies `currentPassword` via `findUserByCredentials`, updates via raw `db.$executeRaw` (users.ts pattern), logs activity with `session.user.email`.
+   884→  - `src/components/erp/change-password.tsx` (NEW): Dialog with Current/New/Confirm password inputs, client-side validation (length ≥6, new===confirm), toast, closes on success.
+   885→  - `src/components/erp/user-menu.tsx`: added "Change password" `DropdownMenuItem` (KeyRound icon) for all authenticated users, between role + admin-only Reload.
+   886→- **Activity user display**: `activity-widget.tsx` appends `· by {user}` (hidden when "system"); `activity-feed.tsx` already had it.
+   887→
+   888→### Verification results
+   889→- agent-browser QA: all 17 views OK as admin (0 failures); 10 spot-checked views OK as viewer (0 failures).
+   890→- **API gating (key security fix)**:
+   891→  - `POST /api/seed` (no session) → **401** (was 200 before) ✓
+   892→  - `POST /api/items` (no session) → **401** (was 500 before) ✓
+   893→  - `GET /api/items` (no session) → **200** (reads stay open) ✓
+   894→  - Logged-in **viewer** POSTing to `/api/items` → **403 "Editor access required"** ✓ (server-side gating blocks viewers, not just UI)
+   895→  - `POST /api/auth/change-password` (no session) → **401** ✓
+   896→- **PDI indicator verified**: Sales SO table shows a "PDI" column with emerald `PDI ✓` badges per SO row (VLM confirmed clean layout, distinguishable badges).
+   897→- **Change-password verified**: user menu has "Change password" item → dialog opens with 3 password fields + Save (disabled until valid) + Cancel (VLM confirmed).
+   898→- **Activity user attribution verified**: after admin-triggered reseed, top activity entry shows `user=admin@taupower.in` (was "system" before — live attribution works). Older entries remain "system" (pre-wiring).
+   899→- dev.log: clean compilation, no errors.
+   900→
+   901→## Unresolved issues / risks + next-phase priorities
+   902→- **GET routes still open** — reads (GET) are intentionally ungated (app shell is gated; fine for prototype). If true server-side read protection is needed (e.g. party-specific data), a future round could add session checks to GETs.
+   903→- **Change-password UX polish** (VLM feedback): the Save button could show a clearer disabled state, eye-toggle for password visibility, and a strength meter. Minor — future round.
+   904→- **Password reset/flow** for forgotten passwords — not implemented (out of scope for a prototype with 3 known demo accounts).
+   905→- **Recurring webDevReview cron (id 450167)** is active and triggered this round.
+   906→- Next-phase recommendations:
+   907→  1. Password UX polish (eye-toggle, strength meter, clearer disabled state) + a "My profile" page showing the signed-in user's details + role.
+   908→  2. Party-scoped data access (e.g. a customer sees only their own SOs/invoices) — requires per-record authz, larger scope.
+   909→  3. Export the activity log to CSV (admin) + date-range filter on the activity feed.
+
+[showing lines 710-909 of 911; use offset=910 with limit to continue reading]

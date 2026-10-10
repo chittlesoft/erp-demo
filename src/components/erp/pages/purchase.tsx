@@ -45,7 +45,7 @@ function POList({ pos, items, vendors, indents }: { pos: (PurchaseOrder & { vend
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase orders</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />New PO</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {pos.length === 0 ? <Empty>No purchase orders</Empty> : (
-          <table className="zebra w-full text-sm">
+          <table className="zebra w-full text-sm table-compact">
             <thead><tr className="text-xs text-muted-foreground border-b">{["PO no.", "Vendor", "Date", "Lines", "Value", "Status", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {pos.map((po) => {
@@ -126,7 +126,7 @@ function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Goods receipt notes</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><PackageCheck className="h-3.5 w-3.5 mr-1" />New GRN</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {grns.length === 0 ? <Empty>No GRNs</Empty> : (
-          <table className="zebra w-full text-sm">
+          <table className="zebra w-full text-sm table-compact">
             <thead><tr className="text-xs text-muted-foreground border-b">{["GRN no.", "Vendor", "Date", "Vendor inv.", "Taxable", "Total", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i >= 4 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {grns.map((g) => (
@@ -192,7 +192,7 @@ function IndentList({ indents }: { indents: (Indent & { item: ItemRow })[] }) {
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase indents</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />New indent</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {indents.length === 0 ? <Empty>No indents</Empty> : (
-          <table className="zebra w-full text-sm">
+          <table className="zebra w-full text-sm table-compact">
             <thead><tr className="text-xs text-muted-foreground border-b">{["Indent", "Item", "Qty", "Required by", "Status"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 2 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {indents.map((i) => (
