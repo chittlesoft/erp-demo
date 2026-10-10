@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Save, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useApi, useAction, inr2 } from "@/lib/erp/client";
 import type { Settings } from "@/lib/erp/shared";
 import { STATES } from "@/lib/erp/shared";
+import { asRole, isAdmin } from "@/lib/erp/auth-shared";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageIntro, SectionCard } from "../shared";
 
@@ -37,6 +39,8 @@ export default function AccountsPage() {
 }
 
 function CompanyCard({ settings }: { settings: Settings }) {
+  const { data: session } = useSession();
+  const canSave = isAdmin(asRole(session?.user?.role));
   const update = useAction("PATCH", "/api/settings", "Company settings saved");
   const [d, setD] = useState(settings);
   const submit = () => update.mutate(d);
@@ -55,9 +59,11 @@ function CompanyCard({ settings }: { settings: Settings }) {
       title="Company profile"
       subtitle="Legal entity, GSTIN and addresses — used on invoices and e-invoice JSON."
       right={
-        <Button onClick={submit} disabled={update.isPending} size="sm">
-          <Save className="h-4 w-4 mr-1" />Save
-        </Button>
+        canSave ? (
+          <Button onClick={submit} disabled={update.isPending} size="sm">
+            <Save className="h-4 w-4 mr-1" />Save
+          </Button>
+        ) : undefined
       }
       bodyClassName="p-5"
     >

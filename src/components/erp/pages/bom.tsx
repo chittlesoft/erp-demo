@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Plus, Trash2, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,9 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useApi, useAction, lookup, inr, qty } from "@/lib/erp/client";
 import type { ItemRow, BomLine } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty } from "../shared";
 
 export default function BomPage() {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const { data: bom, isLoading } = useApi<BomLine[]>("/api/bom");
   const itemMap = lookup(items);
@@ -26,7 +30,7 @@ export default function BomPage() {
 
   return (
     <>
-      <PageIntro actions={<Button onClick={() => setOpen(true)} disabled={!parentId}><Plus className="h-4 w-4 mr-1" />Add BOM line</Button>}>
+      <PageIntro actions={canMutate ? <Button onClick={() => setOpen(true)} disabled={!parentId}><Plus className="h-4 w-4 mr-1" />Add BOM line</Button> : undefined}>
         Multi-level bill of materials with scrap % and cost roll-up. Pick a parent to edit its components.
       </PageIntro>
       <div className="grid lg:grid-cols-4 gap-4">
@@ -69,7 +73,7 @@ export default function BomPage() {
                         <td className="px-5 text-right tabular-nums">{l.scrapPct}%</td>
                         <td className="px-5 text-right tabular-nums">{inr(c?.hasBom ? c.rolledCost : c?.stdCost ?? 0)}{c?.hasBom && <span className="text-[10px] text-muted-foreground block">BOM</span>}</td>
                         <td className="px-5 text-right tabular-nums font-medium">{inr(lineCost)}</td>
-                        <td className="px-2"><Button variant="ghost" size="icon" onClick={() => del.mutate(l.id)} aria-label="Delete line"><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button></td>
+                        <td className="px-2">{canMutate && (<Button variant="ghost" size="icon" onClick={() => del.mutate(l.id)} aria-label="Delete line"><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>)}</td>
                       </tr>
                     );
                   })}

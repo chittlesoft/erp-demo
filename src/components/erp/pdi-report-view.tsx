@@ -19,7 +19,8 @@ import {
 } from "@/lib/erp/pdi-shared";
 
 /** Print-friendly dialog showing a completed PDI report (format TPE/IMS/FR/78).
- * Mirrors the layout of the reference Tau Power PDI sheets. */
+ * Mirrors the layout of the reference Tau Power PDI sheets, with an A4-sized
+ * printable sheet that flows across pages for long characteristic tables. */
 export function PdiReportView({
   reportId,
   onClose,
@@ -32,6 +33,8 @@ export function PdiReportView({
     reportId != null,
   );
 
+  const accepted = r?.result === "ACCEPT";
+
   return (
     <Dialog
       open={reportId !== null}
@@ -39,19 +42,62 @@ export function PdiReportView({
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-5xl">
-        <DialogHeader className="no-print">
+      <DialogContent
+        className="
+          max-w-5xl
+          print:max-w-none print:w-full print:max-h-none print:inset-0
+          print:translate-x-0 print:translate-y-0 print:top-0 print:left-0
+          print:rounded-none print:border-0 print:shadow-none print:p-0
+        "
+      >
+        {/* Header chrome — hidden when printing */}
+        <DialogHeader className="no-print flex flex-row items-center justify-between sm:space-y-0">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4" /> PDI report
+            {r && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                Result <StatusBadge status={r.result} />
+              </span>
+            )}
           </DialogTitle>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Close
+            </Button>
+            <Button size="sm" onClick={() => window.print()} disabled={!r}>
+              <Printer className="h-4 w-4 mr-1" /> Print
+            </Button>
+          </div>
         </DialogHeader>
 
         {reportId === null ? null : isLoading || !r ? (
           <Skeleton className="h-96" />
         ) : (
-          <div className="overflow-x-auto">
-            <div className="pdi-sheet bg-white text-black mx-auto w-[190mm] min-w-[190mm] p-[6mm] shadow-sm print:shadow-none print:p-0 text-[11pt] print-area">
-              {/* Title block */}
+          <div
+            className="
+              print-area max-h-[75vh] overflow-y-auto scroll-thin pr-1
+              print:max-h-none print:overflow-visible print:pr-0
+            "
+          >
+            <div className="pdi-report bg-white text-black mx-auto w-[190mm] min-w-[190mm] p-[6mm] shadow-sm print:shadow-none print:w-full print:min-w-0 print:max-w-none print:p-0 text-[11pt]">
+              {/* ---- Result banner (top, prominent) ---- */}
+              <div
+                className={`mb-3 flex items-center justify-between rounded-md border-2 px-3 py-2 text-center font-bold text-[12pt] ${
+                  accepted
+                    ? "border-emerald-700 bg-emerald-50 text-emerald-800"
+                    : "border-rose-700 bg-rose-50 text-rose-800"
+                }`}
+              >
+                <span className="text-[9pt] font-semibold uppercase tracking-wider">
+                  Overall result
+                </span>
+                <span className="tracking-wide">
+                  {accepted ? "ACCEPTED" : "REJECTED"}
+                </span>
+                <span className="font-mono text-[10pt] font-semibold">{r.pdiNo}</span>
+              </div>
+
+              {/* ---- Title block (τ logo + company + report title) ---- */}
               <table className="w-full border-collapse border-2 border-black">
                 <tbody>
                   <tr>
@@ -68,7 +114,7 @@ export function PdiReportView({
                 </tbody>
               </table>
 
-              {/* Top info grid */}
+              {/* ---- Top info grid (3 logical columns of label/value pairs) ---- */}
               <table className="w-full border-collapse border-2 border-t-0 border-black text-[10pt]">
                 <tbody>
                   <tr>
@@ -123,23 +169,23 @@ export function PdiReportView({
                 </tbody>
               </table>
 
-              {/* Characteristics + readings */}
-              <table className="w-full table-fixed border-collapse border-2 border-black text-[10pt] mt-[4mm] zebra">
+              {/* ---- Characteristics + readings ---- */}
+              <table className="w-full table-fixed border-collapse border-2 border-t-0 border-black text-[10pt] mt-[4mm] zebra table-compact">
                 <colgroup>
-                  <col style={{ width: "7%" }} />
-                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "16%" }} />
                   <col style={{ width: "13%" }} />
-                  <col style={{ width: "14%" }} />
+                  <col style={{ width: "13%" }} />
                   {Array.from({ length: r.sample }, (_, i) => (
-                    <col key={i} style={{ width: `${35 / r.sample}%` }} />
+                    <col key={i} style={{ width: `${34 / r.sample}%` }} />
                   ))}
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "9%" }} />
                 </colgroup>
                 <thead>
                   <tr>
                     <th rowSpan={2} className="border border-black px-1 py-1">Sr.No.</th>
-                    <th rowSpan={2} className="border border-black px-1 py-1">Description</th>
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-left">Description</th>
                     <th rowSpan={2} className="border border-black px-1 py-1">Specification</th>
                     <th rowSpan={2} className="border border-black px-1 py-1">Inspection Method</th>
                     {Array.from({ length: r.sample }, (_, i) => (
@@ -155,31 +201,44 @@ export function PdiReportView({
                 <tbody>
                   {r.chars.map((c) => {
                     const rd = r.readings.find((x) => x.sr === c.sr);
+                    const rowOk = rd?.ok;
                     return (
                       <tr key={c.sr} className="text-center">
-                        <td className="border border-black px-1 py-1">{c.sr}</td>
-                        <td className="border border-black px-1 py-1">{c.description}</td>
+                        <td className="border border-black px-1 py-1 tabular-nums">{c.sr}</td>
+                        <td className="border border-black px-1 py-1 text-left">{c.description}</td>
                         <td className="border border-black px-1 py-1">{specText(c)}</td>
                         <td className="border border-black px-1 py-1">{c.method}</td>
                         {Array.from({ length: r.sample }, (_, i) => (
-                          <td key={i} className="border border-black px-0.5 py-1 tabular-nums">
+                          <td key={i} className="border border-black px-0.5 py-1 text-right tabular-nums">
                             {rd?.values[i] ?? ""}
                           </td>
                         ))}
-                        <td className="border border-black font-semibold px-1 py-1">{rd?.ok ? "OK" : ""}</td>
-                        <td className="border border-black font-semibold px-1 py-1">{rd && !rd.ok ? "NG" : ""}</td>
+                        <td
+                          className={`border border-black font-semibold px-1 py-1 ${
+                            rowOk ? "text-emerald-700" : ""
+                          }`}
+                        >
+                          {rd?.ok ? "OK" : ""}
+                        </td>
+                        <td
+                          className={`border border-black font-semibold px-1 py-1 ${
+                            rd && !rd.ok ? "text-rose-700" : ""
+                          }`}
+                        >
+                          {rd && !rd.ok ? "NG" : ""}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
 
-              {/* Note */}
+              {/* ---- Note ---- */}
               <div className="border-2 border-t-0 border-black min-h-[22mm] p-2 text-[10pt]">
                 <span className="font-semibold">Note if any:</span> {r.note}
               </div>
 
-              {/* Footer */}
+              {/* ---- Footer (sign-off blocks) ---- */}
               <div className="grid grid-cols-3 border-2 border-t-0 border-black text-[9pt]">
                 <div className="p-2 border-r border-black">
                   PDI no. <span className="font-mono">{r.pdiNo}</span>
@@ -195,16 +254,26 @@ export function PdiReportView({
                   Result
                   <br />
                   <span className="font-bold">
-                    {r.result === "ACCEPT" ? "ACCEPTED" : "REJECTED"}
+                    {accepted ? "ACCEPTED" : "REJECTED"}
                   </span>
                 </div>
               </div>
 
               <div className="text-right text-[8.5pt] font-semibold mt-2">{PDI_DOC}</div>
+
+              {/* ---- Print-only footer: document number + print timestamp + page placeholder ---- */}
+              <div className="print-only mt-4 pt-2 border-t border-black/40 text-[9pt] text-black flex items-center justify-between">
+                <span className="font-mono">{PDI_DOC}, Rev.01</span>
+                <span className="font-mono">
+                  Printed: {new Date().toLocaleString("en-IN")}
+                </span>
+                <span className="font-mono">Page ___ of ___</span>
+              </div>
             </div>
           </div>
         )}
 
+        {/* Footer chrome — hidden when printing (Print/Close mirrored in header for accessibility) */}
         <DialogFooter className="no-print items-center gap-3">
           {r && (
             <span className="text-sm mr-auto">

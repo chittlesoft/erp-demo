@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Plus, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useApi, useAction, lookup, inr2, qty } from "@/lib/erp/client";
 import type { ItemRow, Party, SalesOrder, SoLine, Invoice } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty, StatusBadge } from "../shared";
 import { ExportButton } from "../export-button";
 import { InvoiceView } from "../invoice-view";
@@ -64,6 +66,8 @@ export default function SalesPage() {
 }
 
 function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Party; lines: (SoLine & { item: ItemRow })[]; invoices: Invoice[] })[]; items: ItemRow[]; customers: Party[] }) {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const [open, setOpen] = useState(false);
   const [dispSo, setDispSo] = useState<SalesOrder | null>(null);
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -73,9 +77,11 @@ function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Part
       <div className="px-5 pt-4 pb-2 flex items-center">
         <h2 className="text-sm font-semibold">Sales orders</h2>
         <div className="ml-auto">
-          <Button size="sm" onClick={() => setOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" />New SO
-          </Button>
+          {canMutate && (
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />New SO
+            </Button>
+          )}
         </div>
       </div>
       <div className="overflow-x-auto scroll-thin">
@@ -108,7 +114,7 @@ function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Part
                     <td className="px-5 text-right tabular-nums">{inr2(dispatched)}</td>
                     <td className="px-5"><StatusBadge status={so.status} /></td>
                     <td className="px-5 text-right">
-                      {so.status !== "CLOSED" && (
+                      {so.status !== "CLOSED" && canMutate && (
                         <Button size="sm" variant="outline" onClick={() => setDispSo(so)}>
                           <Truck className="h-3.5 w-3.5 mr-1" />Dispatch
                         </Button>

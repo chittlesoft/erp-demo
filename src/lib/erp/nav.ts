@@ -4,7 +4,7 @@ import { create } from "zustand";
 export type View =
   | "dashboard" | "analytics" | "items" | "bom" | "production" | "shopfloor"
   | "quality" | "planning" | "trace" | "inventory" | "warehouse" | "purchase"
-  | "sales" | "jobwork" | "parties" | "accounts";
+  | "sales" | "jobwork" | "parties" | "accounts" | "users";
 
 interface NavState {
   view: View;

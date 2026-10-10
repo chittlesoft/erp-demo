@@ -46,7 +46,7 @@ export default function AnalyticsPage() {
           {data.oee.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.oee} margin={{ left: -16, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.25} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
                 <XAxis dataKey="station" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
                 <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
@@ -60,7 +60,7 @@ export default function AnalyticsPage() {
           {data.fpyByProduct.length ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.fpyByProduct} margin={{ left: -16, right: 8, top: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.25} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
                 <XAxis dataKey="line" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} unit="%" />
                 <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
@@ -79,7 +79,7 @@ export default function AnalyticsPage() {
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={ageingData} margin={{ left: -16, right: 8, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.25} vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--muted-foreground)" strokeOpacity={0.3} vertical={false} />
               <XAxis dataKey="bucket" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} formatter={(v: number) => inr2(v)} />
@@ -124,10 +124,10 @@ export default function AnalyticsPage() {
             <thead>
               <tr className="text-xs text-muted-foreground border-b">
                 <th className="text-left font-medium px-5 py-2">SO</th>
-                <th className="text-left font-medium px-5">Customer</th>
-                <th className="text-left font-medium px-5">Due</th>
-                <th className="text-left font-medium px-5">Bucket</th>
-                <th className="text-right font-medium px-5">Value</th>
+                <th className="text-left font-medium px-5 py-2">Customer</th>
+                <th className="text-left font-medium px-5 py-2">Due</th>
+                <th className="text-left font-medium px-5 py-2">Bucket</th>
+                <th className="text-right font-medium px-5 py-2">Value</th>
               </tr>
             </thead>
             <tbody>

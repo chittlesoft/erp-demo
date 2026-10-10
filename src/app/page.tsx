@@ -19,6 +19,7 @@ const Quality = dynamic(() => import("@/components/erp/pages/quality"));
 const Warehouse = dynamic(() => import("@/components/erp/pages/warehouse"));
 const Analytics = dynamic(() => import("@/components/erp/pages/analytics"));
 const JobWork = dynamic(() => import("@/components/erp/pages/jobwork"));
+const Users = dynamic(() => import("@/components/erp/pages/users"));
 
 export default function Home() {
   const { view } = useNav();
@@ -40,6 +41,7 @@ export default function Home() {
       {view === "warehouse" && <Warehouse />}
       {view === "analytics" && <Analytics />}
       {view === "jobwork" && <JobWork />}
+      {view === "users" && <Users />}
     </Layout>
   );
 }

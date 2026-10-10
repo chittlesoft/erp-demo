@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Plus, FileText, PackageCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useApi, useAction, lookup, inr2, qty } from "@/lib/erp/client";
 import type { ItemRow, Party, Indent, PurchaseOrder, PoLine, Grn } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty, StatusBadge } from "../shared";
 
 export default function PurchasePage() {
@@ -35,10 +37,12 @@ export default function PurchasePage() {
 }
 
 function POList({ pos, items, vendors, indents }: { pos: (PurchaseOrder & { vendor: Party; lines: (PoLine & { item: ItemRow })[]; grns: Grn[] })[]; items: ItemRow[]; vendors: Party[]; indents: (Indent & { item: ItemRow })[] }) {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-xl border bg-card shadow-xs">
-      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase orders</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />New PO</Button></div></div>
+      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase orders</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />New PO</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {pos.length === 0 ? <Empty>No purchase orders</Empty> : (
           <table className="zebra w-full text-sm">
@@ -107,6 +111,8 @@ function PODialog({ open, onOpenChange, items, vendors, indents }: { open: boole
 }
 
 function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos: (PurchaseOrder & { vendor: Party; lines: (PoLine & { item: ItemRow })[] })[] }) {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const [open, setOpen] = useState(false);
   const [poId, setPoId] = useState("");
   const [vendorInvoiceNo, setVendorInvoiceNo] = useState("");
@@ -117,7 +123,7 @@ function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos
   const submit = () => create.mutate({ poId: Number(poId), vendorInvoiceNo, lines: lines.filter((l) => Number(l.qty) > 0).map((l) => ({ poLineId: l.poLineId, qty: Number(l.qty), batchNo: l.batchNo || null })) } as never, { onSuccess: () => onOpenChange(false) });
   return (
     <div className="rounded-xl border bg-card shadow-xs">
-      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Goods receipt notes</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><PackageCheck className="h-3.5 w-3.5 mr-1" />New GRN</Button></div></div>
+      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Goods receipt notes</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><PackageCheck className="h-3.5 w-3.5 mr-1" />New GRN</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {grns.length === 0 ? <Empty>No GRNs</Empty> : (
           <table className="zebra w-full text-sm">
@@ -172,6 +178,8 @@ function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos
 }
 
 function IndentList({ indents }: { indents: (Indent & { item: ItemRow })[] }) {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const [itemId, setItemId] = useState("");
   const [qtyVal, setQty] = useState("");
   const [requiredBy, setRequiredBy] = useState(new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10));
@@ -181,7 +189,7 @@ function IndentList({ indents }: { indents: (Indent & { item: ItemRow })[] }) {
   const submit = () => create.mutate({ itemId: Number(itemId), qty: Number(qtyVal), requiredBy } as never, { onSuccess: () => onOpenChange(false) });
   return (
     <div className="rounded-xl border bg-card shadow-xs">
-      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase indents</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />New indent</Button></div></div>
+      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase indents</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />New indent</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {indents.length === 0 ? <Empty>No indents</Empty> : (
           <table className="zebra w-full text-sm">

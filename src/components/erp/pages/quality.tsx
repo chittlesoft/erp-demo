@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { ClipboardCheck, ShieldAlert, FileCheck2, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useApi, useAction, qty } from "@/lib/erp/client";
 import type { Inspection, Ncr, Ppap, ItemRow, Party } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty, StatusBadge, SectionCard } from "../shared";
 import type { PlanRow, PendingRow, PdiReportDetail } from "@/lib/erp/pdi-shared";
 import { dmy } from "@/lib/erp/pdi-shared";
@@ -42,6 +44,8 @@ export default function QualityPage() {
 }
 
 function InspectionList({ inspections }: { inspections: Inspection[] }) {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const [open, setOpen] = useState(false);
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const [grnNo, setGrnNo] = useState("");
@@ -57,7 +61,7 @@ function InspectionList({ inspections }: { inspections: Inspection[] }) {
   function onOpenChange(o: boolean) { setOpen(o); }
   return (
     <div className="rounded-xl border bg-card shadow-xs">
-      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Incoming inspections (IQC)</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><ClipboardCheck className="h-3.5 w-3.5 mr-1" />New inspection</Button></div></div>
+      <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Incoming inspections (IQC)</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><ClipboardCheck className="h-3.5 w-3.5 mr-1" />New inspection</Button>)}</div></div>
       <div className="overflow-x-auto scroll-thin">
         {inspections.length === 0 ? <Empty>No inspections yet — goods are in QC quarantine awaiting release</Empty> : (
           <table className="zebra w-full text-sm">
@@ -157,6 +161,8 @@ function PpapList({ ppaps }: { ppaps: (Ppap & { customer: Party })[] }) {
 
 // ===================== PDI tab =====================
 function PdiTab() {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const { data: plans, isLoading: plansLoading } = useApi<PlanRow[]>("/api/phase3/pdi/plans");
   const { data: pending, isLoading: pendingLoading } = useApi<PendingRow[]>("/api/phase3/pdi/pending");
   const { data: reports, isLoading: reportsLoading } = useApi<PdiReportDetail[]>("/api/phase3/pdi/reports");
@@ -207,9 +213,11 @@ function PdiTab() {
                     )}
                   </td>
                   <td className="px-3 text-right">
-                    <Button size="sm" variant="outline" onClick={() => setEditItem({ id: p.itemId, code: p.code, name: p.name })}>
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit plan
-                    </Button>
+                    {canMutate && (
+                      <Button size="sm" variant="outline" onClick={() => setEditItem({ id: p.itemId, code: p.code, name: p.name })}>
+                        <Pencil className="h-3.5 w-3.5 mr-1" /> Edit plan
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -256,9 +264,13 @@ function PdiTab() {
                   <td className="px-3 text-right tabular-nums">{qty(r.covered)}</td>
                   <td className="px-3 text-right">
                     {r.toInspect > 0 ? (
-                      <Button size="sm" onClick={() => setInspectRow(r)}>
-                        <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Inspect
-                      </Button>
+                      canMutate ? (
+                        <Button size="sm" onClick={() => setInspectRow(r)}>
+                          <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Inspect
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Inspect</span>
+                      )
                     ) : (
                       <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Ready to invoice</span>
                     )}

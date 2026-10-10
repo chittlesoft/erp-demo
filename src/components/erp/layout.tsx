@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Boxes, Cpu, LayoutGrid, ShieldCheck, Network, Warehouse, Factory,
   CalendarClock, ScanSearch, Moon, Sun, Menu, X, Users, ShoppingCart, Receipt, BookOpen,
-  BarChart3, ArrowLeftRight, Loader2,
+  BarChart3, ArrowLeftRight, Loader2, UserCog,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSession } from "next-auth/react";
@@ -11,12 +11,14 @@ import { Button } from "@/components/ui/button";
 import { useApi } from "@/lib/erp/client";
 import type { Settings } from "@/lib/erp/shared";
 import { useNav, type View } from "@/lib/erp/nav";
+import { asRole, isAdmin } from "@/lib/erp/auth-shared";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { NotificationsBell } from "./notifications";
 import { ActivityFeed, ActivityButton } from "./activity-feed";
 import { LoginPage } from "./login-page";
 import { UserMenu } from "./user-menu";
-const NAV: { href: View; label: string; icon: typeof LayoutDashboard; group: string }[] = [
+
+const NAV: { href: View; label: string; icon: typeof LayoutDashboard; group: string; adminOnly?: boolean }[] = [
   { href: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "" },
   { href: "analytics", label: "Management Dashboards", icon: BarChart3, group: "" },
   { href: "items", label: "Items", icon: Boxes, group: "Manufacturing" },
@@ -33,6 +35,7 @@ const NAV: { href: View; label: string; icon: typeof LayoutDashboard; group: str
   { href: "jobwork", label: "Job Work", icon: ArrowLeftRight, group: "Supply chain" },
   { href: "parties", label: "Customers & Vendors", icon: Users, group: "Supply chain" },
   { href: "accounts", label: "Tally & Company", icon: BookOpen, group: "Accounts" },
+  { href: "users", label: "User management", icon: UserCog, group: "Accounts", adminOnly: true },
 ];
 
 const VIEW_TITLES: Record<View, string> = Object.fromEntries(NAV.map((n) => [n.href, n.label])) as Record<View, string>;
@@ -52,7 +55,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const { status } = useSession();
+  const { status, data: session } = useSession();
+  const admin = isAdmin(asRole(session?.user?.role));
   // Disable data fetches while unauthenticated/loading so the login screen
   // doesn't fire the settings/dashboard/etc API calls before the user signs in.
   const ready = status === "authenticated";
@@ -90,9 +94,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <button className="ml-auto md:hidden text-sidebar-foreground" onClick={() => setOpen(false)} aria-label="Close menu"><X className="h-5 w-5" /></button>
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto scroll-thin">
-          {NAV.map((n, i) => {
+          {NAV.filter((n) => !n.adminOnly || admin).map((n, i, filtered) => {
             const active = view === n.href;
-            const prevGroup = NAV[i - 1]?.group;
+            const prevGroup = filtered[i - 1]?.group;
             return (
               <div key={n.href}>
                 {n.group && n.group !== prevGroup && (

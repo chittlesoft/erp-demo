@@ -23,7 +23,9 @@ import { useApi, useAction } from "@/lib/erp/client";
 import type { PdiChar, PdiPlan, PlanRow } from "@/lib/erp/pdi-shared";
 
 /** Dialog editor for a single finished-good item's PDI plan. Mirrors the
- * characteristics grid from the original `PlanEditor`. */
+ * characteristics grid from the original `PlanEditor`. The body scrolls so
+ * the Save button stays visible; characteristic rows use a responsive grid
+ * that collapses the numeric spec inputs on narrow screens. */
 export function PdiPlanDialog({
   item,
   onClose,
@@ -100,10 +102,11 @@ export function PdiPlanDialog({
           <DialogDescription>
             {item.name}
             {existing ? " · editing existing plan" : " · no plan yet"}
+            {" "}· {d.chars.length} characteristic{d.chars.length === 1 ? "" : "s"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="max-h-[62vh] overflow-y-auto scroll-thin pr-1 -mr-1 space-y-3">
           <p className="text-xs text-muted-foreground">
             Characteristics checked before dispatch, per part. Parts with a plan cannot be invoiced until an accepted PDI covers the dispatch quantity.
           </p>
@@ -133,30 +136,38 @@ export function PdiPlanDialog({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-md border">
+          <div className="overflow-x-auto rounded-md border scroll-thin">
             <table className="w-full text-sm">
+              <colgroup>
+                <col style={{ width: "2.5rem" }} />
+                <col style={{ width: "min(14rem, 32%)" }} />
+                <col style={{ width: "8rem" }} />
+                <col style={{ width: "min(20rem, 32%)" }} />
+                <col style={{ width: "min(14rem, 22%)" }} />
+                <col style={{ width: "2.5rem" }} />
+              </colgroup>
               <thead>
-                <tr className="bg-muted/40 text-xs text-muted-foreground">
-                  <th className="text-left font-medium py-2 px-2 w-8">Sr.</th>
-                  <th className="text-left font-medium px-1">Description</th>
-                  <th className="text-left font-medium px-1 w-28">Type</th>
-                  <th className="text-left font-medium px-1">Specification</th>
-                  <th className="text-left font-medium px-1">Inspection method</th>
-                  <th className="w-10" />
+                <tr className="bg-muted/60 text-xs text-muted-foreground">
+                  <th className="text-left font-medium py-2 px-2">Sr.</th>
+                  <th className="text-left font-medium px-2">Description</th>
+                  <th className="text-left font-medium px-2">Type</th>
+                  <th className="text-left font-medium px-2">Specification</th>
+                  <th className="text-left font-medium px-2">Inspection method</th>
+                  <th className="px-1" />
                 </tr>
               </thead>
               <tbody>
                 {d.chars.map((c, i) => (
-                  <tr key={i} className="border-t">
+                  <tr key={i} className="border-t align-top">
                     <td className="py-1.5 px-2 tabular-nums">{i + 1}</td>
-                    <td className="px-1">
+                    <td className="px-1 py-1.5">
                       <Input
                         className="h-8"
                         value={c.description}
                         onChange={(e) => upd(i, { description: e.target.value })}
                       />
                     </td>
-                    <td className="px-1">
+                    <td className="px-1 py-1.5">
                       <Select
                         value={c.kind}
                         onValueChange={(v) => upd(i, { kind: v as "num" | "attr" })}
@@ -170,32 +181,34 @@ export function PdiPlanDialog({
                         </SelectContent>
                       </Select>
                     </td>
-                    <td className="px-1">
+                    <td className="px-1 py-1.5">
                       {c.kind === "num" ? (
-                        <div className="flex items-center gap-1">
+                        <div className="grid grid-cols-[1fr_1fr_1fr_3.5rem] items-center gap-1">
                           <Input
-                            className="h-8 w-20 text-right tabular-nums"
+                            className="h-8 text-right tabular-nums"
                             placeholder="nominal"
+                            aria-label="Nominal"
                             value={c.nominal ?? ""}
                             onChange={(e) => upd(i, { nominal: numOrNull(e.target.value) })}
                           />
-                          <span className="text-xs text-muted-foreground">−</span>
                           <Input
-                            className="h-8 w-16 text-right tabular-nums"
-                            placeholder="tol"
+                            className="h-8 text-right tabular-nums"
+                            placeholder="tol −"
+                            aria-label="Tolerance minus"
                             value={c.tolMinus ?? ""}
                             onChange={(e) => upd(i, { tolMinus: numOrNull(e.target.value) })}
                           />
-                          <span className="text-xs text-muted-foreground">+</span>
                           <Input
-                            className="h-8 w-16 text-right tabular-nums"
-                            placeholder="tol"
+                            className="h-8 text-right tabular-nums"
+                            placeholder="tol +"
+                            aria-label="Tolerance plus"
                             value={c.tolPlus ?? ""}
                             onChange={(e) => upd(i, { tolPlus: numOrNull(e.target.value) })}
                           />
                           <Input
-                            className="h-8 w-14"
+                            className="h-8"
                             placeholder="unit"
+                            aria-label="Unit"
                             value={c.unit}
                             onChange={(e) => upd(i, { unit: e.target.value })}
                           />
@@ -209,18 +222,18 @@ export function PdiPlanDialog({
                         />
                       )}
                     </td>
-                    <td className="px-1">
+                    <td className="px-1 py-1.5">
                       <Input
                         className="h-8"
                         value={c.method}
                         onChange={(e) => upd(i, { method: e.target.value })}
                       />
                     </td>
-                    <td className="px-1 text-right">
+                    <td className="px-1 py-1.5 text-right">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-rose-50 dark:hover:bg-rose-950/30"
                         aria-label="Remove characteristic"
                         onClick={() => removeChar(i)}
                       >
@@ -232,7 +245,7 @@ export function PdiPlanDialog({
                 {d.chars.length === 0 && (
                   <tr>
                     <td colSpan={6} className="py-6 text-center text-xs text-muted-foreground">
-                      No characteristics yet — click “Add characteristic”.
+                      No characteristics yet — click &ldquo;Add characteristic&rdquo; below.
                     </td>
                   </tr>
                 )}

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useApi, useAction, lookup, inr, qty } from "@/lib/erp/client";
 import type { ItemRow, Warehouse, StockRow, StockTxn } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty } from "../shared";
 import { ExportButton } from "../export-button";
 
@@ -23,6 +25,8 @@ const INV_CSV_COLUMNS = [
 ] as const;
 
 export default function InventoryPage() {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const { data: stock, isLoading } = useApi<(StockRow & { warehouseCode: string; warehouseName: string })[]>("/api/inventory");
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const { data: whs } = useApi<Warehouse[]>("/api/warehouses");
@@ -54,7 +58,7 @@ export default function InventoryPage() {
       <PageIntro actions={
         <div className="flex items-center gap-2">
           <ExportButton filename="tau-inventory" rows={csvRows} columns={[...INV_CSV_COLUMNS]} />
-          <Button onClick={() => setOpen(true)}><ArrowRightLeft className="h-4 w-4 mr-1" />Transfer / QC release</Button>
+          {canMutate && (<Button onClick={() => setOpen(true)}><ArrowRightLeft className="h-4 w-4 mr-1" />Transfer / QC release</Button>)}
         </div>
       }>
         Batch-wise stock by warehouse (QC quarantine and rejected stock excluded from available totals). FIFO issues deplete oldest batches first.

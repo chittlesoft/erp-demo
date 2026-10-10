@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,6 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ITEM_TYPES, PRODUCT_LINES, TRACKING, UOMS, TYPE_LABEL, LINE_LABEL, type ItemRow } from "@/lib/erp/shared";
 import { useApi, useAction, inr, qty } from "@/lib/erp/client";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty } from "../shared";
 import { ExportButton } from "../export-button";
 import { ItemDetail } from "../item-detail";
@@ -135,6 +137,9 @@ function SortHeader({
 }
 
 export default function ItemsPage() {
+  const { data: session } = useSession();
+  const role = asRole(session?.user?.role);
+  const canMutate = canEdit(role);
   const { data, isLoading } = useApi<ItemRow[]>("/api/items");
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
@@ -185,7 +190,7 @@ export default function ItemsPage() {
       <PageIntro actions={
         <div className="flex items-center gap-2">
           <ExportButton filename="tau-items" rows={rows as unknown as Record<string, unknown>[]} columns={[...ITEM_CSV_COLUMNS]} />
-          <Button onClick={() => { setEdit(null); setOpen(true); }}><Plus className="h-4 w-4 mr-1" />New item</Button>
+          {canMutate && (<Button onClick={() => { setEdit(null); setOpen(true); }}><Plus className="h-4 w-4 mr-1" />New item</Button>)}
         </div>
       }>
         Raw materials, sub-assemblies and finished sensors, with HSN/GST, traceability level and OEM part numbers.
@@ -248,9 +253,11 @@ export default function ItemsPage() {
                           <Button variant="ghost" size="icon" onClick={() => setView(i)} aria-label={`Quick view ${i.code}`} title="Quick view">
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => { setEdit(i); setOpen(true); }} aria-label={`Edit ${i.code}`} title="Edit">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
+                          {canMutate && (
+                            <Button variant="ghost" size="icon" onClick={() => { setEdit(i); setOpen(true); }} aria-label={`Edit ${i.code}`} title="Edit">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { PackagePlus, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApi, useAction, lookup, inr2, qty } from "@/lib/erp/client";
 import type { ItemRow, Bin, StockRow } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty } from "../shared";
 
 export default function WarehousePage() {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const { data: bins } = useApi<(Bin & { item: ItemRow })[]>("/api/phase3/bins");
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const { data: stock } = useApi<(StockRow & { warehouseCode: string })[]>("/api/inventory");
@@ -24,7 +28,7 @@ export default function WarehousePage() {
 
   return (
     <>
-      <PageIntro actions={<Button onClick={() => setOpen(true)}><PackagePlus className="h-4 w-4 mr-1" />Put away</Button>}>
+      <PageIntro actions={canMutate ? <Button onClick={() => setOpen(true)}><PackagePlus className="h-4 w-4 mr-1" />Put away</Button> : undefined}>
         WMS-lite — bin/rack locations per store. Unbinned stock from GRN is shown for put-away; FIFO picks deplete bins automatically on issue/dispatch.
       </PageIntro>
       <div className="grid grid-cols-3 gap-4 mb-4">

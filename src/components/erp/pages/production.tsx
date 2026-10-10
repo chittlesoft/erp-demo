@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Plus, Play, CheckCircle2, Cpu, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,10 +9,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useApi, useAction, lookup, qty } from "@/lib/erp/client";
 import type { ItemRow, Warehouse, ProductionOrder, Requirement } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty, StatusBadge } from "../shared";
 import { useNav } from "@/lib/erp/nav";
 
 export default function ProductionPage() {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const { data: orders, isLoading } = useApi<ProductionOrder[]>("/api/orders");
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const { data: whs } = useApi<Warehouse[]>("/api/warehouses");
@@ -26,7 +30,7 @@ export default function ProductionPage() {
 
   return (
     <>
-      <PageIntro actions={<Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" />New order</Button>}>
+      <PageIntro actions={canMutate ? <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" />New order</Button> : undefined}>
         Plan production against a BOM, issue material FIFO, release to the shop floor, and complete with serial generation.
       </PageIntro>
       <div className="rounded-xl border bg-card shadow-xs">
@@ -50,9 +54,9 @@ export default function ProductionPage() {
                       <td className="px-5 text-right tabular-nums text-muted-foreground">{o.dueDate}</td>
                       <td className="px-5"><StatusBadge status={o.status} /></td>
                       <td className="px-5 py-2 text-right whitespace-nowrap">
-                        {o.status === "PLANNED" && it?.tracking === "serial" && <Button size="sm" variant="outline" onClick={() => release.mutate(o.id)} disabled={release.isPending}><Cpu className="h-3.5 w-3.5 mr-1" />Release to floor</Button>}
-                        {o.status === "PLANNED" && it?.tracking !== "serial" && <Button size="sm" variant="outline" onClick={() => start.mutate(o.id)} disabled={start.isPending}><Play className="h-3.5 w-3.5 mr-1" />Start</Button>}
-                        {o.status === "IN_PROGRESS" && it?.tracking !== "serial" && <Button size="sm" variant="outline" onClick={() => setView(o)}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
+                        {canMutate && o.status === "PLANNED" && it?.tracking === "serial" && <Button size="sm" variant="outline" onClick={() => release.mutate(o.id)} disabled={release.isPending}><Cpu className="h-3.5 w-3.5 mr-1" />Release to floor</Button>}
+                        {canMutate && o.status === "PLANNED" && it?.tracking !== "serial" && <Button size="sm" variant="outline" onClick={() => start.mutate(o.id)} disabled={start.isPending}><Play className="h-3.5 w-3.5 mr-1" />Start</Button>}
+                        {canMutate && o.status === "IN_PROGRESS" && it?.tracking !== "serial" && <Button size="sm" variant="outline" onClick={() => setView(o)}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                         {o.status === "IN_PROGRESS" && it?.tracking === "serial" && <Button size="sm" variant="outline" onClick={() => go("shopfloor")}>Shop floor →</Button>}
                         <Button size="icon" variant="ghost" onClick={() => setView(o)} aria-label="Details"><FileText className="h-3.5 w-3.5" /></Button>
                       </td>
@@ -65,7 +69,7 @@ export default function ProductionPage() {
         </div>
       </div>
       <OrderDialog open={open} onOpenChange={setOpen} items={items ?? []} fgWhId={fgWh?.id} />
-      {view && <DetailDialog order={view} onClose={() => setView(null)} onComplete={(g, r) => complete.mutate({ id: view.id, goodQty: g, rejectQty: r }, { onSuccess: () => setView(null) })} />}
+      {view && <DetailDialog order={view} canMutate={canMutate} onClose={() => setView(null)} onComplete={(g, r) => complete.mutate({ id: view.id, goodQty: g, rejectQty: r }, { onSuccess: () => setView(null) })} />}
     </>
   );
 }
@@ -98,7 +102,7 @@ function OrderDialog({ open, onOpenChange, items, fgWhId }: { open: boolean; onO
   );
 }
 
-function DetailDialog({ order, onClose, onComplete }: { order: ProductionOrder; onClose: () => void; onComplete: (g: number, r: number) => void }) {
+function DetailDialog({ order, onClose, onComplete, canMutate }: { order: ProductionOrder; onClose: () => void; onComplete: (g: number, r: number) => void; canMutate: boolean }) {
   const { data: reqs } = useApi<Requirement[]>(`/api/orders/${order.id}/requirements`);
   const [good, setGood] = useState(String(order.qty));
   const [rej, setRej] = useState("0");
@@ -128,7 +132,7 @@ function DetailDialog({ order, onClose, onComplete }: { order: ProductionOrder; 
               </tbody>
             </table>
           </div>
-          {order.status === "IN_PROGRESS" && (
+          {canMutate && order.status === "IN_PROGRESS" && (
             <div className="border-t pt-3">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Complete order</h3>
               <div className="grid grid-cols-3 gap-3 items-end">

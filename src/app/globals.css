@@ -242,10 +242,14 @@
   padding-top: 0.5rem;
 }
 
-/* Print: hide chrome, show only documents (invoices, pick lists, labels).
+/* Print-only elements: visible only when printing (page footers, "Page X of Y",
+   print timestamp, document numbers). Hidden on screen, shown in print. */
+.print-only { display: none; }
+
+/* Print: hide chrome, show only documents (invoices, pick lists, labels, PDI reports).
    The sidebar/header/footer already carry .no-print. The .print-area wrapper
    becomes the only visible content on the page; we also neutralise its
-   dialog-scroll container so the entire invoice prints on a single A4 page. */
+   dialog-scroll container so the entire document prints across A4 pages. */
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
@@ -257,15 +261,30 @@
     overflow: visible !important;
   }
   .no-print { display: none !important; }
+  .print-only { display: block; }
   body { background: #fff !important; }
-  /* Tighter A4 margins so the invoice fits one page. */
-  @page { margin: 12mm; }
-  /* Hide all dialogs except the printing one (the invoice dialog wrapper
-     sits inside .print-area so it stays visible; others get hidden). */
+  /* A4 margins — 14mm top/bottom for header/footer breathing room, 12mm sides. */
+  @page { margin: 14mm 12mm; }
+  /* Hide all dialogs except the printing one (the document wrapper sits inside
+     .print-area so it stays visible; the overlay + other dialogs get hidden). */
   [data-slot="dialog-overlay"] { display: none !important; }
-  /* Avoid breaking inside the line-items rows. */
+  /* Multi-page tables: repeat the column header on each printed A4 page, and
+     avoid splitting a single row across a page break. */
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
   .print-area table tr { break-inside: avoid; }
   .print-area table thead { display: table-header-group; }
+  /* Forced page break utility — insert before an element to start a new A4 page. */
+  .print-page-break { break-before: page; }
+  /* PDI report: neutralise the on-screen A4-sized sheet constraints so the
+     report fills the printable page width and long characteristic tables flow
+     across pages (thead repeats, rows don't split). */
+  .pdi-report {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    box-shadow: none !important;
+  }
 }
 
 /* Scan-feedback container — inline alert under the scan input. Uses shadcn

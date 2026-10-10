@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, Check, X, Minus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +34,9 @@ import {
 
 /** Dialog to perform a PDI inspection for a pending SO line. Renders the
  * characteristics grid from the item's PDI plan with N reading columns
- * (N = sample no.) and per-cell live ok/not-ok validation. */
+ * (N = sample no.) and per-cell live ok/not-ok validation. Sticky first
+ * columns (Sr/Description/Specification/Method) stay visible when scrolling
+ * right through the sample readings. */
 export function PdiInspectionDialog({
   row,
   onClose,
@@ -115,6 +117,10 @@ export function PdiInspectionDialog({
       { onSuccess: () => onClose() },
     );
 
+  // Sticky-column left offsets — fixed widths via <colgroup> keep these aligned.
+  // Class strings are written inline below so Tailwind v4's source scanner
+  // sees them as literal candidates.
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-4xl">
@@ -136,7 +142,7 @@ export function PdiInspectionDialog({
         {!plan ? (
           <p className="text-sm text-destructive">No PDI plan for this part.</p>
         ) : (
-          <>
+          <div className="max-h-[62vh] overflow-y-auto scroll-thin pr-1 -mr-1 space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Invoice qty</Label>
@@ -176,38 +182,54 @@ export function PdiInspectionDialog({
               {plan.refStandard || "-"}
             </div>
 
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto rounded-md border scroll-thin">
+              <table className="w-full text-sm border-collapse">
+                <colgroup>
+                  <col style={{ width: "2.5rem" }} />
+                  <col style={{ width: "12rem" }} />
+                  <col style={{ width: "10rem" }} />
+                  <col style={{ width: "9rem" }} />
+                  {Array.from({ length: S }, (_, i) => (
+                    <col key={i} style={{ width: "5rem" }} />
+                  ))}
+                  <col style={{ width: "4.5rem" }} />
+                </colgroup>
                 <thead>
-                  <tr className="bg-muted/40 text-xs text-muted-foreground">
-                    <th className="text-left font-medium p-2">Sr.</th>
-                    <th className="text-left font-medium p-2">Description</th>
-                    <th className="text-left font-medium p-2">Specification</th>
-                    <th className="text-left font-medium p-2">Method</th>
+                  <tr className="bg-muted text-xs text-muted-foreground border-b">
+                    <th className="sticky left-0 z-30 bg-muted text-left font-medium p-2 border-r">Sr.</th>
+                    <th className="sticky left-[2.5rem] z-30 bg-muted text-left font-medium p-2 border-r">Description</th>
+                    <th className="sticky left-[14.5rem] z-30 bg-muted text-left font-medium p-2 border-r">Specification</th>
+                    <th className="sticky left-[24.5rem] z-30 bg-muted text-left font-medium p-2 border-r">Method</th>
                     {Array.from({ length: S }, (_, i) => (
-                      <th key={i} className="font-medium p-2 text-center w-20">
+                      <th key={i} className="font-medium p-2 text-center border-r last:border-r-0">
                         {i + 1}
                       </th>
                     ))}
-                    <th className="font-medium p-2">Remark</th>
+                    <th className="font-medium p-2 text-center">Result</th>
                   </tr>
                 </thead>
                 <tbody>
                   {plan.chars.map((c, ci) => (
-                    <tr key={c.sr} className="border-t">
-                      <td className="p-2 tabular-nums">{c.sr}</td>
-                      <td className="p-2 whitespace-nowrap">{c.description}</td>
-                      <td className="p-2 font-mono text-xs whitespace-nowrap">{specText(c)}</td>
-                      <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">{c.method}</td>
+                    <tr key={c.sr} className="border-b last:border-0">
+                      <td className="sticky left-0 z-10 bg-background p-2 tabular-nums border-r">{c.sr}</td>
+                      <td className="sticky left-[2.5rem] z-10 bg-background p-2 whitespace-nowrap border-r">
+                        {c.description}
+                      </td>
+                      <td className="sticky left-[14.5rem] z-10 bg-background p-2 font-mono text-xs whitespace-nowrap border-r">
+                        {specText(c)}
+                      </td>
+                      <td className="sticky left-[24.5rem] z-10 bg-background p-2 text-xs text-muted-foreground whitespace-nowrap border-r">
+                        {c.method}
+                      </td>
                       {Array.from({ length: S }, (_, i) => {
                         const v = get(c.sr, i);
                         const ok = charOk(c, v);
                         return (
-                          <td key={i} className="p-1">
+                          <td key={i} className="p-1 border-r last:border-r-0">
                             {c.kind === "attr" ? (
                               <Select value={v} onValueChange={(x) => set(c.sr, i, x)}>
                                 <SelectTrigger
-                                  className={`h-8 px-2 ${ok === false ? "border-destructive text-destructive" : ""}`}
+                                  className={`h-8 px-2 ${ok === false ? "border-destructive text-destructive" : ok === true ? "border-emerald-500 text-emerald-700 dark:text-emerald-400" : ""}`}
                                 >
                                   <SelectValue placeholder="—" />
                                 </SelectTrigger>
@@ -227,11 +249,19 @@ export function PdiInspectionDialog({
                           </td>
                         );
                       })}
-                      <td className="p-2">
+                      <td className="p-2 text-center">
                         {results[ci] == null ? (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="inline-flex items-center justify-center text-muted-foreground/60" title="Pending readings">
+                            <Minus className="h-4 w-4" />
+                          </span>
+                        ) : results[ci] ? (
+                          <span className="inline-flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.5" title="In spec">
+                            <Check className="h-3.5 w-3.5" />
+                          </span>
                         ) : (
-                          <StatusBadge status={results[ci] ? "ACCEPT" : "REJECT"} />
+                          <span className="inline-flex items-center justify-center rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 px-1.5 py-0.5" title="Out of spec">
+                            <X className="h-3.5 w-3.5" />
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -255,13 +285,37 @@ export function PdiInspectionDialog({
               PDI {qty(row.covered)} · to inspect {qty(row.toInspect)}
             </div>
 
+            {/* Live overall-result preview banner */}
+            <div
+              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                overall === "ACCEPT"
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                  : overall === "REJECT"
+                  ? "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200"
+                  : "border-border bg-muted/40 text-muted-foreground"
+              }`}
+            >
+              <span className="text-xs font-medium uppercase tracking-wider">Preview</span>
+              {overall ? (
+                <>
+                  <span className="font-semibold">{acceptedLabel(overall)}</span>
+                  <span className="text-xs">
+                    {overall === "ACCEPT"
+                      ? "— all characteristics in specification."
+                      : "— one or more characteristics out of specification."}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs">Enter all readings to see the live result.</span>
+              )}
+            </div>
+
             {overall === "REJECT" && (
               <p className="text-sm text-destructive">
-                One or more characteristics are out of specification. Saving will record a rejected
-                PDI and raise an NCR; the lot cannot be dispatched.
+                Saving will record a rejected PDI and raise an NCR; the lot cannot be dispatched.
               </p>
             )}
-          </>
+          </div>
         )}
 
         <DialogFooter className="items-center gap-3">
@@ -284,4 +338,8 @@ export function PdiInspectionDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function acceptedLabel(o: "ACCEPT" | "REJECT") {
+  return o === "ACCEPT" ? "ACCEPTED" : "REJECTED";
 }

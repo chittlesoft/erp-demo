@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApi, useAction } from "@/lib/erp/client";
 import { STATES, validGstin, type Party } from "@/lib/erp/shared";
+import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty, StatusBadge, SectionCard } from "../shared";
 
 const ROLES = ["CUSTOMER", "VENDOR", "JOBWORKER"];
@@ -59,6 +61,8 @@ function PartyDialog({ party, open, onOpenChange }: { party: Party | null; open:
 }
 
 export default function PartiesPage() {
+  const { data: session } = useSession();
+  const canMutate = canEdit(asRole(session?.user?.role));
   const { data, isLoading } = useApi<Party[]>("/api/parties");
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
@@ -69,7 +73,7 @@ export default function PartiesPage() {
   const hasFilters = q !== "" || role !== "all";
   return (
     <>
-      <PageIntro actions={<Button onClick={() => { setEdit(null); setOpen(true); }}><Plus className="h-4 w-4 mr-1" />New party</Button>}>
+      <PageIntro actions={canMutate ? <Button onClick={() => { setEdit(null); setOpen(true); }}><Plus className="h-4 w-4 mr-1" />New party</Button> : undefined}>
         Customers, vendors and job workers with GSTIN validation (format + mod-35 check digit + state-code match). Intra-state → CGST+SGST; inter-state → IGST.
       </PageIntro>
       <SectionCard bodyClassName="p-0">
@@ -117,9 +121,11 @@ export default function PartiesPage() {
                     <td className="px-5 text-xs">{p.city}</td>
                     <td className="px-5 text-xs text-right tabular-nums">{p.distanceKm} km</td>
                     <td className="px-2">
-                      <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true); }} aria-label="Edit">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
+                      {canMutate && (
+                        <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true); }} aria-label="Edit">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}
