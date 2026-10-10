@@ -9,6 +9,7 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import { useAction } from "@/lib/erp/client";
 import { Button } from "@/components/ui/button";
 import { ActivityWidget } from "../activity-widget";
+import { ProductionTrendChart } from "../production-trend-chart";
 import { useSession } from "next-auth/react";
 import { asRole, isAdmin } from "@/lib/erp/auth-shared";
 
@@ -31,6 +32,11 @@ export default function DashboardPage() {
   const { data: session } = useSession();
   const admin = isAdmin(asRole(session?.user?.role));
 
+  // Greeting — first word of the signed-in user's display name (e.g. "Plant"
+  // from "Plant Admin"). Falls back to a neutral greeting when no session yet.
+  const displayName = session?.user?.name?.trim();
+  const firstName = displayName ? displayName.split(/\s+/)[0] : null;
+
   if (isLoading || !data) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -42,10 +48,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Live overview of Tau Power&apos;s manufacturing operations — inventory, orders, shop floor and supply chain.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight">
+            Welcome back{firstName ? `, ${firstName}` : ""}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Here&apos;s what&apos;s happening at Tau Power today.
+          </p>
+        </div>
         {admin && (
           <Button variant="outline" size="sm" onClick={() => reseed.mutate(undefined as never)} disabled={reseed.isPending}>
             <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reload demo data
@@ -188,6 +199,8 @@ export default function DashboardPage() {
 
         <ActivityWidget className="lg:col-span-1" />
       </div>
+
+      <ProductionTrendChart days={14} />
     </div>
   );
 }

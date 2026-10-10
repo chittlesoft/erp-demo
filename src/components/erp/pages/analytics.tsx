@@ -3,6 +3,7 @@ import { useApi, inr2, qty } from "@/lib/erp/client";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, Cell } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageIntro, Empty, Kpi, SectionCard } from "../shared";
+import { ProductionTrendChart } from "../production-trend-chart";
 
 type Analytics = {
   oee: { station: string; scans: number; pass: number; oee: number }[];
@@ -47,6 +48,8 @@ export default function AnalyticsPage() {
         <Kpi label="Inventory ageing 90+" value={inr2(data.ageing["90+"])} accent="text-destructive" tone="rose" />
         <Kpi label="Stations tracked" value={String(data.oee.length)} tone="neutral" />
       </div>
+
+      <ProductionTrendChart days={14} className="mb-4" />
 
       <div className="grid lg:grid-cols-2 gap-4">
         <SectionCard

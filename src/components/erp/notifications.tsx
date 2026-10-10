@@ -1,6 +1,6 @@
 "use client";
 import { useMemo } from "react";
-import { Bell, FileClock, ShieldAlert, Boxes, FileCheck2, ClipboardList } from "lucide-react";
+import { Bell, FileClock, ShieldAlert, Boxes, FileCheck2, ClipboardList, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -9,6 +9,10 @@ import { useApi } from "@/lib/erp/client";
 import { useNav, type View } from "@/lib/erp/nav";
 import type { Summary, Phase3Summary } from "@/lib/erp/shared";
 import { cn } from "@/lib/utils";
+import {
+  useNotificationPrefs,
+} from "@/lib/notification-prefs";
+import { NotificationPreferences } from "./notification-preferences";
 
 type Alert = {
   id: string;
@@ -30,25 +34,26 @@ export function NotificationsBell() {
   const { go } = useNav();
   const { data: summary, isLoading: l1 } = useApi<Summary>("/api/summary");
   const { data: phase3, isLoading: l2 } = useApi<Phase3Summary>("/api/phase3/summary");
+  const { prefs } = useNotificationPrefs();
 
   const alerts = useMemo<Alert[]>(() => {
     const out: Alert[] = [];
     if (summary) {
-      if (summary.irnPending > 0)
+      if (summary.irnPending > 0 && prefs.irnPending)
         out.push({ id: "irn", label: "Invoices awaiting IRN", count: summary.irnPending, view: "sales", icon: FileClock, tone: "warn" });
-      if (summary.openIndents > 0)
+      if (summary.openIndents > 0 && prefs.openIndents)
         out.push({ id: "indents", label: "Open purchase indents", count: summary.openIndents, view: "purchase", icon: ClipboardList, tone: "info" });
     }
     if (phase3) {
-      if (phase3.openNcrs > 0)
+      if (phase3.openNcrs > 0 && prefs.openNcrs)
         out.push({ id: "ncr", label: "Open NCRs", count: phase3.openNcrs, view: "quality", icon: ShieldAlert, tone: "danger" });
-      if (phase3.unbinned > 0)
+      if (phase3.unbinned > 0 && prefs.putAway)
         out.push({ id: "bin", label: "Stock to put away", count: phase3.unbinned, view: "warehouse", icon: Boxes, tone: "warn" });
-      if (phase3.ppapPending > 0)
+      if (phase3.ppapPending > 0 && prefs.ppapPending)
         out.push({ id: "ppap", label: "PPAP submissions pending", count: phase3.ppapPending, view: "quality", icon: FileCheck2, tone: "info" });
     }
     return out;
-  }, [summary, phase3]);
+  }, [summary, phase3, prefs]);
 
   const total = alerts.reduce((s, a) => s + a.count, 0);
   const loading = l1 || l2;
@@ -77,9 +82,24 @@ export function NotificationsBell() {
       <PopoverContent align="end" className="w-72 p-0">
         <div className="px-3 py-2 border-b flex items-center justify-between">
           <span className="text-sm font-semibold">Open alerts</span>
-          {total > 0 && (
-            <span className="text-[11px] text-muted-foreground tabular-nums">{total} total</span>
-          )}
+          <div className="flex items-center gap-1">
+            {total > 0 && (
+              <span className="text-[11px] text-muted-foreground tabular-nums mr-1">{total} total</span>
+            )}
+            <NotificationPreferences
+              trigger={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                  aria-label="Notification preferences"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
+              }
+            />
+          </div>
         </div>
         <div className="max-h-80 overflow-y-auto scroll-thin">
           {loading ? (

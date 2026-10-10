@@ -8,9 +8,15 @@
 // the user by email + verifies the sha256 password hash. On success the role +
 // id are propagated through the JWT callback to the session callback so the
 // client can read `session.user.role` + `session.user.id`.
+//
+// `events.signIn` fires on every successful sign-in (cleaner hook than the
+// `jwt` callback, which only sees `user` on the first call). We use it to
+// update `users.lastLogin` and append a row to `login_events` via
+// `recordLogin()` — fire-and-forget so it never breaks sign-in.
 import { type AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { ensureUsers, findUserByCredentials } from "@/lib/erp/users";
+import { headers } from "next/headers";
+import { ensureUsers, findUserByCredentials, recordLogin } from "@/lib/erp/users";
 
 // Module augmentation: attach `role` + `id` to the session user + the JWT.
 declare module "next-auth" {
@@ -79,6 +85,32 @@ export const authOptions: AuthOptions = {
         session.user.role = token.role;
       }
       return session;
+    },
+  },
+  events: {
+    // Fires after a successful sign-in with the user object returned from
+    // `authorize`. We use it (instead of the `jwt` callback) because it is
+    // called exactly once per real sign-in and cleanly separated from token
+    // refresh. The work is fire-and-forget — `recordLogin` internally catches
+    // all errors and logs them so this callback can never break the sign-in.
+    async signIn({ user }) {
+      const id = user?.id;
+      const email = user?.email;
+      if (!id || !email) return;
+      const userId = Number(id);
+      if (!Number.isFinite(userId) || userId <= 0) return;
+      // Best-effort extraction of the request IP + user agent — NextAuth v4's
+      // events callback doesn't pass the raw Request, so we reach for the
+      // App Router `headers()` helper. If that fails (e.g. called outside a
+      // request scope), we still record the login without IP/UA.
+      let req: Request | undefined;
+      try {
+        const hdrs = await headers();
+        req = new Request("http://localhost", { headers: hdrs });
+      } catch {
+        // No request context — fall through with req = undefined.
+      }
+      await recordLogin(userId, email, req);
     },
   },
   pages: {

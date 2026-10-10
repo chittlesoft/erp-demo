@@ -2,14 +2,16 @@
 // My Profile page — available to ALL signed-in users (not admin-gated).
 //
 // Shows the signed-in user's identity (name, email, role badge, numeric id,
-// account status), exposes the Change Password dialog, and lists their own
-// recent activity (filtered server-side via the `user` query param on
-// /api/activity so we only pay for the rows we actually show).
+// account status, last login), exposes the Change Password dialog, and lists
+// their own recent activity (filtered server-side via the `user` query param
+// on /api/activity so we only pay for the rows we actually show) + their own
+// login history (from /api/auth/login-events — most recent row is used for the
+// "Last login" readout).
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   KeyRound, Mail, ShieldCheck, Hash, Activity as ActivityIcon,
-  History, Loader2, CircleUser,
+  History, Loader2, CircleUser, Clock, LogIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +21,7 @@ import { ChangePasswordDialog } from "../change-password";
 import { useApi } from "@/lib/erp/client";
 import { asRole, ROLE_LABEL, type Role } from "@/lib/erp/auth-shared";
 import type { ActivityLogRow } from "@/lib/erp/activity";
+import type { LoginEventRow } from "@/lib/erp/users";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role → badge colour (no indigo/blue).
@@ -113,6 +116,32 @@ function ActivityRow({ row, now }: { row: ActivityLogRow; now: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Login-history helpers — timestamp formatting + user-agent truncation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Format an ISO timestamp as a compact en-IN date-time (e.g. "15 Oct 2026, 02:23 PM"). */
+function formatLoginTs(ts: string): string {
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return ts;
+  return d.toLocaleString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/** Best-effort truncation of a User-Agent string for compact table display. */
+function truncateUA(ua: string | null, max = 48): string | null {
+  if (!ua) return null;
+  const trimmed = ua.trim();
+  if (trimmed.length <= max) return trimmed;
+  return trimmed.slice(0, max - 1) + "…";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Page.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -164,6 +193,19 @@ export default function ProfilePage() {
     !!email,
   );
   const rows = useMemo(() => data ?? [], [data]);
+
+  // Login history — most recent 10 events for the signed-in user. The first
+  // row is used as the "Last login" readout in the identity card; the full
+  // list populates the Login history section. The API auto-restricts non-admins
+  // to their own events, so no `userId` query is required.
+  const loginKey = userId ? `/api/auth/login-events?limit=10` : null;
+  const {
+    data: loginEvents,
+    isLoading: loginLoading,
+    isError: loginError,
+  } = useApi<LoginEventRow[]>(loginKey ?? "/api/auth/login-events?limit=0", !!userId);
+  const loginRows = useMemo(() => loginEvents ?? [], [loginEvents]);
+  const lastLoginTs = loginRows.length > 0 ? loginRows[0].ts : null;
 
   if (status === "loading") {
     return (
@@ -247,6 +289,21 @@ export default function ProfilePage() {
                 }
               />
               <InfoRow
+                icon={Clock}
+                label="Last login"
+                value={
+                  loginLoading && !lastLoginTs ? (
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                    </span>
+                  ) : lastLoginTs ? (
+                    <span className="tabular-nums">{formatLoginTs(lastLoginTs)}</span>
+                  ) : (
+                    <span className="text-muted-foreground italic">First sign-in</span>
+                  )
+                }
+              />
+              <InfoRow
                 icon={ActivityIcon}
                 label="Account status"
                 value={<StatusBadge status="ACTIVE" />}
@@ -309,6 +366,76 @@ export default function ProfilePage() {
           </div>
         </SectionCard>
       </div>
+
+      {/* Login history — full-width below the two-column grid. Most recent
+          first; the first row is also surfaced as "Last login" in the identity
+          card above. Only the signed-in user's own events are visible here
+          (the API auto-restricts non-admins to their own events). */}
+      <SectionCard
+        title={
+          <span className="flex items-center gap-2">
+            <LogIn className="h-4 w-4" />Login history
+          </span>
+        }
+        subtitle={`Last ${loginRows.length === 0 ? "0" : loginRows.length} successful sign-ins attributed to ${email ?? "your account"}`}
+        bodyClassName="overflow-x-auto scroll-thin"
+      >
+        {loginLoading ? (
+          <div className="px-5 py-3 space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-7" />
+            ))}
+          </div>
+        ) : loginError ? (
+          <div className="text-center text-sm text-muted-foreground py-8">
+            <LogIn className="h-5 w-5 mx-auto mb-1.5 opacity-50" />
+            Could not load login history.
+          </div>
+        ) : loginRows.length === 0 ? (
+          <div className="text-center text-sm text-muted-foreground py-8">
+            <LogIn className="h-5 w-5 mx-auto mb-1.5 opacity-50" />
+            No previous sign-ins recorded. This is your first sign-in.
+          </div>
+        ) : (
+          <table className="zebra w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b">
+                <th className="text-left font-medium px-5 py-2">When</th>
+                <th className="text-left font-medium px-3">IP address</th>
+                <th className="text-left font-medium px-3">User agent</th>
+                <th className="text-right font-medium px-5">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loginRows.map((row) => {
+                const ua = truncateUA(row.userAgent);
+                return (
+                  <tr key={row.id} className="border-b last:border-0">
+                    <td className="px-5 py-2 tabular-nums whitespace-nowrap">{formatLoginTs(row.ts)}</td>
+                    <td className="px-3 font-mono text-xs text-muted-foreground tabular-nums">
+                      {row.ip ?? <span className="text-muted-foreground/60">—</span>}
+                    </td>
+                    <td className="px-3 text-xs text-muted-foreground max-w-[28ch] truncate" title={row.userAgent ?? undefined}>
+                      {ua ?? <span className="text-muted-foreground/60">—</span>}
+                    </td>
+                    <td className="px-5 text-right">
+                      {row.success ? (
+                        <Badge className="text-[10px] uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          Success
+                        </Badge>
+                      ) : (
+                        <Badge className="text-[10px] uppercase tracking-wider bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
+                          Failed
+                        </Badge>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
 
       <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
     </>

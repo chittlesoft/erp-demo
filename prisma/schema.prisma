@@ -525,6 +525,22 @@ model User {
   password  String                 // sha256 hex hash
   role      String  @default("viewer")  // "admin" | "operator" | "viewer"
   active    Boolean @default(true)
+  lastLogin DateTime?              // updated on each successful sign-in
 
   @@map("users")
+}
+
+// Append-only record of successful sign-ins. Written by `recordLogin()` in
+// `src/lib/erp/users.ts` from NextAuth's `events.signIn` callback. Used by
+// the Profile page's "Login history" section + the "Last login" readout.
+model LoginEvent {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  ts        String                   // ISO timestamp
+  email     String
+  ip        String?                  // from request headers (best-effort)
+  userAgent String?
+  success   Boolean  @default(true)  // false for failed attempts (reserved)
+
+  @@map("login_events")
 }
