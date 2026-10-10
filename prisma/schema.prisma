@@ -1,0 +1,494 @@
+// Tau Power Electronics — Manufacturing ERP
+// Prisma schema (SQLite). Ported from the original Drizzle schema (Phases 1-4).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================ Phase 1: Masters, BOM, Inventory, Production ============================
+
+model Item {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  name           String
+  type           String   @default("RM") // RM | SFG | FG | CONSUMABLE
+  productLine    String?  // NOx | EGTS | UQS | DeltaP | Lambda
+  hsn            String
+  gstRate        Float    @default(18)
+  uom            String   @default("NOS")
+  tracking       String   @default("none") // none | batch | serial
+  reorderLevel   Float    @default(0)
+  stdCost        Float    @default(0)
+  customerPartNo String?
+  specs          String?
+
+  bomAsParent    BomLine[]      @relation("BomParent")
+  bomAsComponent BomLine[]      @relation("BomComponent")
+  stockTxns      StockTxn[]
+  orders         ProductionOrder[]
+  serials        Serial[]
+  indents        Indent[]
+  poLines        PoLine[]
+  soLines        SoLine[]
+  bins           Bin[]
+  routingOps     RoutingOp[]
+  wipUnits       WipUnit[]
+
+  @@map("items")
+}
+
+model BomLine {
+  id               Int     @id @default(autoincrement())
+  parentItemId    Int
+  componentItemId Int
+  qty              Float
+  scrapPct        Float   @default(0)
+  version         String  @default("A")
+
+  parentItem      Item    @relation("BomParent", fields: [parentItemId], references: [id], onDelete: Cascade)
+  componentItem   Item    @relation("BomComponent", fields: [componentItemId], references: [id], onDelete: Cascade)
+
+  @@map("bom_lines")
+}
+
+model Warehouse {
+  id     Int    @id @default(autoincrement())
+  code   String @unique // RM | WIP | FG | QC | REJ | JW
+  name   String
+
+  stockTxns StockTxn[]
+  bins      Bin[]
+  orders    ProductionOrder[]
+
+  @@map("warehouses")
+}
+
+// Stock ledger: every movement is a row (+ in / - out)
+model StockTxn {
+  id           Int     @id @default(autoincrement())
+  date         String
+  itemId       Int
+  warehouseId  Int
+  qty          Float
+  txnType      String  // RECEIPT | ISSUE | PROD_OUT | TRANSFER | ADJUST
+  ref          String?
+  batchNo      String?
+  unitCost     Float   @default(0)
+
+  item         Item    @relation(fields: [itemId], references: [id])
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@map("stock_txns")
+}
+
+model ProductionOrder {
+  id             Int    @id @default(autoincrement())
+  orderNo        String @unique
+  itemId        Int
+  qty            Float
+  dueDate        String
+  status         String @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED
+  warehouseId   Int
+  goodQty        Float  @default(0)
+  rejectQty      Float  @default(0)
+  consumedBatches String @default("[]") // JSON [{itemId, batchNo, qty}]
+
+  item          Item    @relation(fields: [itemId], references: [id])
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id])
+  serials       Serial[]
+  wipUnits      WipUnit[]
+
+  @@map("production_orders")
+}
+
+model Serial {
+  id               Int     @id @default(autoincrement())
+  serialNo         String  @unique
+  itemId           Int
+  productionOrderId Int
+  eolResult        String  // PASS | FAIL
+  eolData          String  @default("{}") // JSON
+  date             String
+  status           String  @default("IN_STOCK") // IN_STOCK | DISPATCHED | REJECTED | RETURNED
+  invoiceId       Int?
+
+  item             Item    @relation(fields: [itemId], references: [id])
+  order            ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  invoice          Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@map("serials")
+}
+
+// ============================ Phase 2: Parties, Purchase, Sales & GST ============================
+
+model Settings {
+  id             Int    @id @default(1)
+  legalName      String
+  gstin          String
+  stateCode      String
+  address        String
+  city           String
+  pincode        String
+  cin            String @default("")
+  phone          String @default("")
+  email          String @default("")
+  plantAddress   String @default("")
+  plantCity      String @default("")
+  plantPincode   String @default("")
+  certifications String @default("")
+  tallyCompany   String @default("")
+  salesLedger    String @default("")
+  purchaseLedger String @default("")
+
+  @@map("settings")
+}
+
+model Party {
+  id         Int    @id @default(autoincrement())
+  code       String @unique
+  name       String
+  role       String // CUSTOMER | VENDOR | JOBWORKER
+  gstin      String
+  stateCode  String
+  address    String
+  city       String
+  pincode    String
+  distanceKm Int    @default(0)
+
+  purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
+  invoices       Invoice[]
+  ppaps          Ppap[]
+
+  @@map("parties")
+}
+
+model Indent {
+  id         Int    @id @default(autoincrement())
+  indentNo   String @unique
+  itemId     Int
+  qty        Float
+  requiredBy String
+  status     String @default("OPEN") // OPEN | ORDERED
+  poId       Int?
+
+  item       Item   @relation(fields: [itemId], references: [id])
+
+  @@map("indents")
+}
+
+model PurchaseOrder {
+  id        Int    @id @default(autoincrement())
+  poNo      String @unique
+  vendorId  Int
+  date      String
+  status    String @default("OPEN") // OPEN | PARTIAL | CLOSED
+
+  vendor    Party  @relation(fields: [vendorId], references: [id])
+  lines     PoLine[]
+  grns      Grn[]
+
+  @@map("purchase_orders")
+}
+
+model PoLine {
+  id          Int    @id @default(autoincrement())
+  poId        Int
+  itemId      Int
+  qty         Float
+  rate        Float
+  receivedQty Float @default(0)
+
+  po          PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  item        Item   @relation(fields: [itemId], references: [id])
+
+  @@map("po_lines")
+}
+
+model Grn {
+  id              Int    @id @default(autoincrement())
+  grnNo           String @unique
+  poId            Int
+  date            String
+  vendorInvoiceNo String
+  lines           String // JSON [{poLineId,itemId,qty,rate,batchNo}]
+  taxable         Float
+  cgst            Float
+  sgst            Float
+  igst            Float
+  total           Float
+
+  po              PurchaseOrder @relation(fields: [poId], references: [id])
+
+  @@map("grns")
+}
+
+model SalesOrder {
+  id           Int    @id @default(autoincrement())
+  soNo         String @unique
+  customerId   Int
+  customerPo   String
+  date         String
+  deliveryDate String
+  status       String @default("OPEN") // OPEN | PARTIAL | CLOSED
+
+  customer     Party  @relation(fields: [customerId], references: [id])
+  lines        SoLine[]
+  invoices     Invoice[]
+
+  @@map("sales_orders")
+}
+
+model SoLine {
+  id            Int    @id @default(autoincrement())
+  soId          Int
+  itemId        Int
+  qty           Float
+  rate          Float
+  dispatchedQty Float @default(0)
+
+  so            SalesOrder @relation(fields: [soId], references: [id], onDelete: Cascade)
+  item          Item   @relation(fields: [itemId], references: [id])
+
+  @@map("so_lines")
+}
+
+model Invoice {
+  id            Int     @id @default(autoincrement())
+  invNo         String  @unique
+  soId          Int
+  customerId    Int
+  date          String
+  placeOfSupply String
+  lines         String  // JSON InvoiceLine[]
+  taxable       Float
+  cgst          Float
+  sgst          Float
+  igst          Float
+  roundOff      Float   @default(0)
+  total         Float
+  vehicleNo     String?
+  transporter   String?
+  distanceKm    Int     @default(0)
+  irn           String?
+  ackNo         String?
+  ewbNo         String?
+  status        String  @default("ACTIVE") // ACTIVE | CANCELLED
+
+  customer      Party   @relation(fields: [customerId], references: [id])
+  so            SalesOrder @relation(fields: [soId], references: [id])
+  serials       Serial[]
+  notes         Note[]
+
+  @@map("invoices")
+}
+
+// ============================ Phase 3: MES-lite, WMS-lite, Quality ============================
+
+model RoutingOp {
+  id        Int    @id @default(autoincrement())
+  itemId   Int
+  seq       Int
+  code      String // e.g. ASM-1
+  name      String
+  station   String
+  cycleSec  Int    @default(0)
+  params    String @default("[]") // JSON Param[]
+
+  item      Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("routing_ops")
+}
+
+model WipUnit {
+  id              Int    @id @default(autoincrement())
+  serialNo        String @unique
+  itemId          Int
+  productionOrderId Int
+  seq             Int
+  status          String @default("QUEUED") // QUEUED | HOLD | DONE | SCRAP
+  reworkCount     Int    @default(0)
+  results         String @default("{}") // JSON {seq: {param values, result}}
+
+  item            Item   @relation(fields: [itemId], references: [id])
+  order           ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  logs            OpLog[]
+
+  @@map("wip_units")
+}
+
+model OpLog {
+  id        Int    @id @default(autoincrement())
+  wipUnitId Int
+  seq       Int
+  opCode    String
+  station   String
+  operator  String
+  result    String // PASS | FAIL
+  data      String @default("{}")
+  reason    String?
+  ts        String
+
+  wipUnit   WipUnit @relation(fields: [wipUnitId], references: [id], onDelete: Cascade)
+
+  @@map("op_logs")
+}
+
+model Bin {
+  id          Int    @id @default(autoincrement())
+  code        String @unique
+  warehouseId Int
+  itemId      Int
+  batchNo     String?
+  qty         Float  @default(0)
+
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  item        Item   @relation(fields: [itemId], references: [id])
+  txns        BinTxn[]
+  counts      CycleCount[]
+
+  @@map("bins")
+}
+
+model BinTxn {
+  id      Int    @id @default(autoincrement())
+  binId   Int
+  date    String
+  qty     Float
+  ref     String?
+  kind    String // IN | OUT | MOVE
+
+  bin     Bin @relation(fields: [binId], references: [id], onDelete: Cascade)
+
+  @@map("bin_txns")
+}
+
+model CycleCount {
+  id        Int    @id @default(autoincrement())
+  binId     Int
+  date      String
+  countedQty Float
+  variance  Float
+  posted    Boolean @default(false)
+
+  bin       Bin @relation(fields: [binId], references: [id])
+
+  @@map("cycle_counts")
+}
+
+model Inspection {
+  id         Int    @id @default(autoincrement())
+  date       String
+  refType    String // GRN | IN_PROCESS | FINAL
+  refNo      String
+  itemId     Int
+  batchNo    String?
+  lotQty     Float
+  sampleQty  Float
+  result     String // ACCEPT | REJECT | PARTIAL
+  acceptedQty Float @default(0)
+  rejectedQty Float @default(0)
+  notes      String?
+
+  @@map("inspections")
+}
+
+model Ncr {
+  id         Int    @id @default(autoincrement())
+  date       String
+  source     String // INCOMING | IN_PROCESS | PRE_DISPATCH
+  refNo      String
+  itemId     Int
+  batchNo    String?
+  qty        Float
+  defect     String
+  disposition String // RETURN | SCRAP | USE_AS_IS | REWORK
+  status     String @default("OPEN") // OPEN | CLOSED
+
+  @@map("ncrs")
+}
+
+model Ppap {
+  id           Int    @id @default(autoincrement())
+  customerId   Int
+  itemId       Int
+  level        String @default("3") // 1-3
+  status       String @default("PENDING") // PENDING | SUBMITTED | INTERIM | APPROVED | REJECTED
+  submissionDate String?
+  pswDate      String?
+
+  customer     Party @relation(fields: [customerId], references: [id])
+
+  @@map("ppaps")
+}
+
+model PdiPlan {
+  id        Int    @id @default(autoincrement())
+  itemId    Int
+  characteristics String // JSON [{label, nominal, plus, minus, method} | {label, kind:"bool", method}]
+
+  @@map("pdi_plans")
+}
+
+model PdiReport {
+  id        Int    @id @default(autoincrement())
+  invoiceNo String?
+  itemId    Int
+  qty       Int
+  sampleNo  Int
+  date      String
+  readings  String // JSON
+  result    String // ACCEPT | REJECT
+
+  @@map("pdi_reports")
+}
+
+// ============================ Phase 4: Job work, Notes, Analytics ============================
+
+model JobWorkChallan {
+  id        Int    @id @default(autoincrement())
+  challanNo String @unique
+  direction String // OUT | IN
+  partyId   Int
+  date      String
+  sac       String?
+  status    String @default("OPEN") // OPEN | CLOSED
+  vehicleNo String?
+  lines     String // JSON [{itemId, batchNo, qty, returnedQty, lossQty, deadline, deemed}]
+
+  @@map("job_work_challans")
+}
+
+model Note {
+  id         Int    @id @default(autoincrement())
+  noteNo     String @unique
+  kind       String // CRN | DBN
+  invoiceId  Int
+  date       String
+  reason     String
+  lines      String // JSON
+  taxable    Float
+  cgst       Float
+  sgst       Float
+  igst       Float
+  total      Float
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("notes")
+}
+
+model GspLog {
+  id        Int    @default(autoincrement()) @id
+  docType   String
+  docNo     String
+  mode      String // SIMULATED | LIVE
+  request   String
+  response  String
+  ts        String
+}
