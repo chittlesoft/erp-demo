@@ -1,10 +1,12 @@
-import { api } from "@/lib/erp/api";
+import { api, requireAdmin } from "@/lib/erp/api";
 import { ensureSeeded } from "@/lib/erp/seed";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 
-export const POST = api(async () => {
+// Reseeding wipes + rebuilds all demo data — admin only.
+export const POST = api(async (req) => {
+  const session = await requireAdmin(req);
   await ensureSeeded(true);
-  await logActivity({
+  void logActivityBy(session, {
     module: "seed",
     action: "reseed",
     refType: "seed",

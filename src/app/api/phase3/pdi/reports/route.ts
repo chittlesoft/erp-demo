@@ -1,12 +1,13 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { createReport, listReports, type CreateReportInput } from "@/lib/erp/pdi";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 
 export const GET = api(() => listReports());
 
 export const POST = api(async (req) => {
+  const session = await requireEditor(req);
   const report = await createReport(await body<CreateReportInput>(req));
-  await logActivity({
+  void logActivityBy(session, {
     module: "pdi",
     action: "inspect",
     refType: "pdi",

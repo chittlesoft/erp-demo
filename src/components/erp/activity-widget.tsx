@@ -135,8 +135,15 @@ export function ActivityWidget({ className }: { className?: string }) {
                       </span>
                     )}
                   </div>
-                  {row.detail && (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{row.detail}</p>
+                  {(row.detail || (row.user && row.user !== "system")) && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {row.detail}
+                      {row.user && row.user !== "system" && (
+                        <span className="text-muted-foreground/70">
+                          {row.detail ? " · " : ""}by {row.user}
+                        </span>
+                      )}
+                    </p>
                   )}
                 </div>
               </li>

@@ -1,12 +1,13 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { updateItem } from "@/lib/erp/service";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 
 export const PATCH = api(async (req, ctx) => {
+  const session = await requireEditor(req);
   const { id } = await ctx!.params;
   const idNum = Number(id);
   const item = await updateItem(idNum, await body(req));
-  await logActivity({
+  void logActivityBy(session, {
     module: "items",
     action: "update",
     refType: "item",

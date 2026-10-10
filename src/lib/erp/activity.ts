@@ -16,6 +16,7 @@
 
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
+import type { AuthSession } from "@/lib/erp/api";
 
 // Clean row shape returned by listActivity and consumed by the client feed.
 export type ActivityLogRow = {
@@ -95,6 +96,34 @@ export async function logActivity(entry: ActivityLogInput): Promise<void> {
     // Activity logging must never break the calling flow.
     console.error("[activity] logActivity failed:", e instanceof Error ? e.message : e);
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Session-aware variants — let mutating API routes attribute their actions to
+// the signed-in user without sprinkling `?? "system"` everywhere. Both are thin
+// wrappers around `logActivity` and stay fully backward-compatible: existing
+// callers that still pass `user: "system"` (or omit `user`) keep working.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve the activity-log `user` string for a session — the signed-in user's
+ * email, falling back to `"system"` when there is no session (defensive:
+ * mutating routes gate on `requireEditor`/`requireAdmin` first, so this is only
+ * ever reached by a logged-in caller).
+ */
+export function activityUser(session: AuthSession | null | undefined): string {
+  return session?.user?.email ?? "system";
+}
+
+/**
+ * Log an activity entry attributed to the given session. Equivalent to
+ * `logActivity({ ...entry, user: activityUser(session) })`.
+ */
+export async function logActivityBy(
+  session: AuthSession | null | undefined,
+  entry: ActivityLogInput,
+): Promise<void> {
+  await logActivity({ ...entry, user: activityUser(session) });
 }
 
 /**

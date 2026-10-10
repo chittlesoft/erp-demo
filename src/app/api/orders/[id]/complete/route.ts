@@ -1,13 +1,14 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { completeOrder } from "@/lib/erp/service";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 
 export const POST = api(async (req, ctx) => {
+  const session = await requireEditor(req);
   const id = Number((await ctx!.params).id);
   const { goodQty, rejectQty } = await body<{ goodQty: number; rejectQty: number }>(req);
   const order = await completeOrder(id, goodQty, rejectQty);
   if (order) {
-    await logActivity({
+    void logActivityBy(session, {
       module: "production",
       action: "complete",
       refType: "order",

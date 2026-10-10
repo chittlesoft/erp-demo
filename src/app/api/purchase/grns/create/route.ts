@@ -1,9 +1,10 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { createGrn } from "@/lib/erp/phase2";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 import { db } from "@/lib/db";
 
 export const POST = api(async (req) => {
+  const session = await requireEditor(req);
   const totals = await createGrn(await body(req));
   // createGrn returns only the computed totals — recover the newest GRN row
   // (the one the transaction just inserted) to log its grnNo.
@@ -12,7 +13,7 @@ export const POST = api(async (req) => {
     select: { grnNo: true },
   });
   if (grn) {
-    await logActivity({
+    void logActivityBy(session, {
       module: "purchase",
       action: "receive",
       refType: "grn",

@@ -1,7 +1,8 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { transfer } from "@/lib/erp/service";
 
 export const POST = api(async (req) => {
+  await requireEditor(req);
   const { itemId, batchNo, fromWh, toWh, qty, ref } = await body<{
     itemId: number; batchNo: string | null; fromWh: number; toWh: number; qty: number; ref: string;
   }>(req);

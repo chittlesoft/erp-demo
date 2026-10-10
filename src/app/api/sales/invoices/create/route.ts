@@ -1,7 +1,7 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { createInvoice } from "@/lib/erp/phase2";
 import { assert as pdiAssert, link as pdiLink } from "@/lib/erp/pdi";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 import { db } from "@/lib/db";
 
 type CreateInvoiceInput = {
@@ -13,6 +13,7 @@ type CreateInvoiceInput = {
 };
 
 export const POST = api(async (req) => {
+  const session = await requireEditor(req);
   const input = await body<CreateInvoiceInput>(req);
   // PDI dispatch gate — blocks the dispatch (and thus invoice creation) until
   // every line whose part has a PDI plan is covered by accepted, un-invoiced
@@ -32,7 +33,7 @@ export const POST = api(async (req) => {
   });
   if (inv) {
     await pdiLink(input.soId, input.lines, inv.id, inv.invNo);
-    await logActivity({
+    void logActivityBy(session, {
       module: "sales",
       action: "dispatch",
       refType: "invoice",

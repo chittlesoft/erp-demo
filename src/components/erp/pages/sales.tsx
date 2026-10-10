@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, Truck, X } from "lucide-react";
+import { ClipboardCheck, Plus, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useApi, useAction, lookup, inr2, qty } from "@/lib/erp/client";
 import type { ItemRow, Party, SalesOrder, SoLine, Invoice } from "@/lib/erp/shared";
+import type { PendingRow } from "@/lib/erp/pdi-shared";
 import { asRole, canEdit } from "@/lib/erp/auth-shared";
 import { PageIntro, Empty, StatusBadge } from "../shared";
 import { ExportButton } from "../export-button";
 import { InvoiceView } from "../invoice-view";
 
-const SO_COLS = ["SO no.", "Customer", "Cust. PO", "Delivery", "Value", "Dispatched", "Status", ""];
+const SO_COLS = ["SO no.", "Customer", "Cust. PO", "Delivery", "Value", "Dispatched", "Status", "PDI", ""];
 const INV_COLS = ["Invoice", "Date", "Customer", "Taxable", "GST", "Total", "IRN", ""];
 const DISP_COLS = ["Item", "Order", "Dispatched", "Pending", "Now"];
 
@@ -42,6 +43,11 @@ export default function SalesPage() {
   const { data: invoices } = useApi<(Invoice & { customer: Party; so: SalesOrder })[]>("/api/sales/invoices");
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const { data: customers } = useApi<Party[]>("/api/parties?role=CUSTOMER");
+  // Pending PDI rows (one per SO line that has a PDI plan + un-dispatched qty).
+  // Used to surface a "PDI required / PDI ✓" indicator on each SO row in the
+  // list below — the dispatch gate (`pdi.assert`) blocks the actual invoice,
+  // this badge just warns the operator upfront.
+  const { data: pdiPending } = useApi<PendingRow[]>("/api/phase3/pdi/pending");
 
   return (
     <>
@@ -55,7 +61,7 @@ export default function SalesPage() {
           <TabsTrigger value="inv">Invoices</TabsTrigger>
         </TabsList>
         <TabsContent value="so" className="mt-4">
-          <SOList sos={sos ?? []} items={items ?? []} customers={customers ?? []} />
+          <SOList sos={sos ?? []} items={items ?? []} customers={customers ?? []} pdiPending={pdiPending ?? []} />
         </TabsContent>
         <TabsContent value="inv" className="mt-4">
           <InvoiceList invoices={invoices ?? []} />
@@ -65,7 +71,51 @@ export default function SalesPage() {
   );
 }
 
-function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Party; lines: (SoLine & { item: ItemRow })[]; invoices: Invoice[] })[]; items: ItemRow[]; customers: Party[] }) {
+/**
+ * Compact PDI badge shown on each SO row. Reads from the
+ * `/api/phase3/pdi/pending` rows that already cross-reference the SO lines +
+ * their PDI plan coverage:
+ *  - no pending rows for this SO  → no badge (part has no PDI plan, or line
+ *    is fully dispatched so it dropped out of the pending list).
+ *  - any pending row with `toInspect > 0` → amber "PDI {covered}/{pending}"
+ *    (units still need accepted PDI before dispatch).
+ *  - all pending rows `toInspect == 0`   → emerald "PDI ✓" (accepted PDI
+ *    qty covers the dispatch requirement; dispatch will pass the gate).
+ *
+ * The actual dispatch gate (`pdi.assert`) still blocks server-side — this is
+ * purely informational so operators see the gate before clicking Dispatch.
+ */
+function PdiIndicator({ soId, rows }: { soId: number; rows: PendingRow[] }) {
+  const soRows = useMemo(
+    () => rows.filter((r) => r.soId === soId),
+    [soId, rows],
+  );
+  if (soRows.length === 0) return null;
+  const needed = soRows.reduce((s, r) => s + r.pending, 0);
+  const covered = soRows.reduce((s, r) => s + r.covered, 0);
+  const remaining = soRows.reduce((s, r) => s + r.toInspect, 0);
+  const done = remaining <= 1e-6;
+  const tone = done
+    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+    : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300";
+  const label = done
+    ? "PDI ✓"
+    : `PDI ${Number(covered.toFixed(0))}/${Number(needed.toFixed(0))}`;
+  const title = done
+    ? `PDI accepted qty covers the dispatch requirement (${covered.toFixed(0)} of ${needed.toFixed(0)} units accepted)`
+    : `${remaining.toFixed(0)} unit${remaining === 1 ? "" : "s"} still need accepted PDI before dispatch (covered ${covered.toFixed(0)} / needed ${needed.toFixed(0)})`;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium leading-none ${tone}`}
+      title={title}
+    >
+      <ClipboardCheck className="h-3 w-3" aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+function SOList({ sos, items, customers, pdiPending }: { sos: (SalesOrder & { customer: Party; lines: (SoLine & { item: ItemRow })[]; invoices: Invoice[] })[]; items: ItemRow[]; customers: Party[]; pdiPending: PendingRow[] }) {
   const { data: session } = useSession();
   const canMutate = canEdit(asRole(session?.user?.role));
   const [open, setOpen] = useState(false);
@@ -113,6 +163,9 @@ function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Part
                     <td className="px-5 text-right tabular-nums">{inr2(value)}</td>
                     <td className="px-5 text-right tabular-nums">{inr2(dispatched)}</td>
                     <td className="px-5"><StatusBadge status={so.status} /></td>
+                    <td className="px-5">
+                      <PdiIndicator soId={so.id} rows={pdiPending} />
+                    </td>
                     <td className="px-5 text-right">
                       {so.status !== "CLOSED" && canMutate && (
                         <Button size="sm" variant="outline" onClick={() => setDispSo(so)}>

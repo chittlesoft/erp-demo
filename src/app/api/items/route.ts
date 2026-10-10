@@ -1,12 +1,13 @@
-import { api, body } from "@/lib/erp/api";
-import { listItems, createItem, updateItem } from "@/lib/erp/service";
-import { logActivity } from "@/lib/erp/activity";
+import { api, body, requireEditor } from "@/lib/erp/api";
+import { listItems, createItem } from "@/lib/erp/service";
+import { logActivityBy } from "@/lib/erp/activity";
 
 export const GET = api(() => listItems());
 
 export const POST = api(async (req) => {
+  const session = await requireEditor(req);
   const item = await createItem(await body(req));
-  await logActivity({
+  void logActivityBy(session, {
     module: "items",
     action: "create",
     refType: "item",

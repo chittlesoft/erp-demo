@@ -1,11 +1,12 @@
-import { api, body } from "@/lib/erp/api";
+import { api, body, requireEditor } from "@/lib/erp/api";
 import { scanUnit } from "@/lib/erp/phase3";
-import { logActivity } from "@/lib/erp/activity";
+import { logActivityBy } from "@/lib/erp/activity";
 
 export const POST = api(async (req) => {
+  const session = await requireEditor(req);
   const input = await body<Parameters<typeof scanUnit>[0]>(req);
   const result = await scanUnit(input);
-  await logActivity({
+  void logActivityBy(session, {
     module: "shopfloor",
     action: "scan",
     refType: "serial",

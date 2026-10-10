@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
-import { ChevronsUpDown, Loader2, LogOut, RefreshCw, UserCircle2 } from "lucide-react";
+import { ChevronsUpDown, KeyRound, Loader2, LogOut, RefreshCw, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { ROLE_LABEL, asRole, isAdmin, type Role } from "@/lib/erp/auth-shared";
+import { ChangePasswordDialog } from "./change-password";
 
 function initials(name?: string | null): string {
   if (!name) return "U";
@@ -28,6 +29,7 @@ export function UserMenu() {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [reseeding, setReseeding] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
 
   const name = session?.user?.name ?? null;
   const email = session?.user?.email ?? null;
@@ -53,6 +55,7 @@ export function UserMenu() {
   }
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2 pl-1.5 pr-2 h-9" aria-label="User menu">
@@ -82,6 +85,13 @@ export function UserMenu() {
           <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">{ROLE_LABEL[role]}</Badge>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(e) => { e.preventDefault(); setPwOpen(true); }}
+          className="cursor-pointer"
+        >
+          <KeyRound className="h-4 w-4" />
+          <span>Change password</span>
+        </DropdownMenuItem>
         {admin && (
           <DropdownMenuItem
             onSelect={(e) => { e.preventDefault(); reloadDemoData(); }}
@@ -107,5 +117,7 @@ export function UserMenu() {
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
+    <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
+    </>
   );
 }
