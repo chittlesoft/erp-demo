@@ -78,8 +78,75 @@ async function trend(days: number): Promise<TrendPoint[]> {
   });
 }
 
+/** A single day's production summary used for KPI delta indicators. */
+export type TrendDaySummary = {
+  /** ISO date, "YYYY-MM-DD" */
+  date: string;
+  /** Good (EOL PASS) units produced that day */
+  good: number;
+  /** Rejected (EOL FAIL) units produced that day */
+  reject: number;
+  /** First-pass yield for the day (0-100), or null when no units were produced */
+  fpy: number | null;
+};
+
+/** `?summary=true` response — today vs yesterday deltas for dashboard KPIs. */
+export type TrendSummary = {
+  points: TrendPoint[];
+  today: TrendDaySummary;
+  yesterday: TrendDaySummary;
+  /** today.good - yesterday.good (positive = more output) */
+  deltaGood: number;
+  /** today.reject - yesterday.reject (positive = more rejects — worse) */
+  deltaReject: number;
+  /** today.fpy - yesterday.fpy in percentage points; null when either day had no units */
+  deltaFpy: number | null;
+};
+
+/** Today's and yesterday's "YYYY-MM-DD" UTC dates. */
+function todayYesterday(): { today: string; yesterday: string } {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const y = new Date(now);
+  y.setUTCDate(y.getUTCDate() - 1);
+  return { today, yesterday: y.toISOString().slice(0, 10) };
+}
+
+/**
+ * Today vs yesterday production summary for KPI delta indicators. Reuses the
+ * contiguous `trend()` series so the per-day good/reject/fpy numbers match
+ * exactly what the chart shows. Returns `deltaFpy = null` when either day had
+ * no production (so the dashboard can omit the indicator gracefully).
+ */
+async function summary(days: number): Promise<TrendSummary> {
+  const points = await trend(days);
+  const { today: todayStr, yesterday: yesterdayStr } = todayYesterday();
+  const find = (date: string): TrendDaySummary => {
+    const p = points.find((x) => x.date === date);
+    return p ?? { date, good: 0, reject: 0, fpy: null };
+  };
+  const today = find(todayStr);
+  const yesterday = find(yesterdayStr);
+  return {
+    points,
+    today,
+    yesterday,
+    deltaGood: today.good - yesterday.good,
+    deltaReject: today.reject - yesterday.reject,
+    deltaFpy: today.fpy !== null && yesterday.fpy !== null
+      ? +(today.fpy - yesterday.fpy).toFixed(1)
+      : null,
+  };
+}
+
 export const GET = api(async (req: Request) => {
   const url = new URL(req.url);
   const days = Number(url.searchParams.get("days") ?? "14");
+  // `?summary=true` returns the trend array PLUS today/yesterday deltas for
+  // dashboard KPI indicators. The default (no param) keeps returning the bare
+  // `TrendPoint[]` array so the existing `ProductionTrendChart` is unaffected.
+  if (url.searchParams.get("summary") === "true") {
+    return summary(days);
+  }
   return trend(days);
 });

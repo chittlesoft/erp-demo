@@ -1,14 +1,26 @@
-"use client";
-// Client-side notification preferences (stored in localStorage).
+// Notification preferences — types, defaults, and a server-backed reactive hook.
 //
-// Why client-only? Persisting per-user notification preferences on the server
-// would require a new Prisma model (e.g. NotificationPref keyed by userId) —
-// which is owned by the parallel auth/profile agent (12-a) and out of scope for
-// this task. For the prototype we keep the toggle state in localStorage so the
-// bell badge + popover filter immediately reflect the user's choices without a
-// schema migration or extra API round-trip.
+// Originally (round 12-b) these prefs lived in client-side localStorage. Round
+// 13-b migrates them to the server so they follow the user across devices and
+// sessions: the source of truth is the `notification_prefs` SQLite table (one
+// row per user), surfaced via GET/PATCH `/api/notifications/preferences`. The
+// `useNotificationPrefs` hook now wraps `useApi` so any component reading
+// prefs — the bell popover, the preferences dialog — re-renders automatically
+// when a PATCH invalidates the query.
+//
+// The hook returns `{ prefs, isLoading }` where `prefs` falls back to
+// `DEFAULT_PREFS` while the GET is in flight, so the bell always renders with
+// sensible defaults during the first paint after sign-in.
+//
+// NOTE: this file is deliberately NOT marked `"use client"` — it is imported
+// by the server-side `notification-prefs-server.ts` (for `DEFAULT_PREFS`) AND
+// by client components (for `useNotificationPrefs`). A `"use client"` directive
+// would replace the `DEFAULT_PREFS` value with a client-reference proxy on the
+// server, breaking `getPrefs()`. Marking a file `"use client"` only matters
+// for entry-point client modules; `useApi` (imported below from
+// `@/lib/erp/client`, which IS `"use client"`) carries the client boundary.
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useApi } from "@/lib/erp/client";
 
 /** The six notification toggles surfaced in the preferences dialog. */
 export type NotificationPrefs = {
@@ -36,112 +48,26 @@ export const DEFAULT_PREFS: NotificationPrefs = {
   dailyDigest: false,
 };
 
-const STORAGE_KEY = "taupower.notif-prefs";
-
-/** Merge stored prefs with defaults so newly-added toggles always have a value. */
-function normalize(raw: Partial<NotificationPrefs> | null): NotificationPrefs {
-  if (!raw) return { ...DEFAULT_PREFS };
-  return { ...DEFAULT_PREFS, ...raw };
-}
-
-/** Read prefs from localStorage (SSR-safe — returns defaults on the server). */
-export function loadPrefs(): NotificationPrefs {
-  if (typeof window === "undefined") return { ...DEFAULT_PREFS };
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_PREFS };
-    return normalize(JSON.parse(raw) as Partial<NotificationPrefs>);
-  } catch {
-    return { ...DEFAULT_PREFS };
-  }
-}
-
-/** Persist prefs to localStorage. Silently ignores SSR + quota errors. */
-export function savePrefs(prefs: NotificationPrefs): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
-  } catch {
-    /* ignore quota / private-mode errors */
-  }
-}
-
-// `useSyncExternalStore` is the React-blessed way to subscribe to an external
-// store (localStorage) without triggering the `react-hooks/set-state-in-effect`
-// lint rule or causing hydration mismatches.
-
-let prefsCache: NotificationPrefs | null = null;
-let rawCache: string | null = null;
-const listeners = new Set<() => void>();
-
-function readRaw(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function getSnapshot(): NotificationPrefs {
-  const raw = readRaw();
-  // Memoize the parsed prefs against the raw string so the same snapshot value
-  // is returned across renders when localStorage hasn't changed (otherwise
-  // useSyncExternalStore can loop on referentially-different equal objects).
-  if (raw !== rawCache || prefsCache === null) {
-    rawCache = raw;
-    prefsCache = raw ? normalize(JSON.parse(raw) as Partial<NotificationPrefs>) : { ...DEFAULT_PREFS };
-  }
-  return prefsCache;
-}
-
-function getServerSnapshot(): NotificationPrefs {
-  return DEFAULT_PREFS;
-}
-
-function notify(): void {
-  // Invalidate the parsed cache so the next getSnapshot() reflects the new value.
-  rawCache = null;
-  prefsCache = null;
-  for (const l of listeners) l();
-}
-
-function subscribe(callback: () => void): () => void {
-  listeners.add(callback);
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", callback);
-  }
-  return () => {
-    listeners.delete(callback);
-    if (typeof window !== "undefined") {
-      window.removeEventListener("storage", callback);
-    }
-  };
-}
-
 /**
- * Reactive hook for notification prefs. Loads on mount, persists on change,
- * and re-renders every component using this hook when prefs change anywhere.
+ * Reactive hook for notification prefs. Server-backed via
+ * `GET /api/notifications/preferences`. Returns `DEFAULT_PREFS` while the
+ * fetch is in flight so consumers (bell popover, preferences dialog) can
+ * render with sensible defaults before the first response arrives. Mutations
+ * happen through `useAction("PATCH", …)` (see `notification-preferences.tsx`);
+ * on success the TanStack Query cache is invalidated, which causes every
+ * component using this hook to refetch + re-render.
+ *
  * Components using this MUST be client components (`"use client"` at the top).
  */
 export function useNotificationPrefs(): {
   prefs: NotificationPrefs;
-  setPref: (key: keyof NotificationPrefs, value: boolean) => void;
-  reset: () => void;
+  isLoading: boolean;
 } {
-  const prefs = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-
-  const setPref = useCallback((key: keyof NotificationPrefs, value: boolean) => {
-    const next: NotificationPrefs = { ...getSnapshot(), [key]: value };
-    savePrefs(next);
-    notify();
-  }, []);
-
-  const reset = useCallback(() => {
-    savePrefs({ ...DEFAULT_PREFS });
-    notify();
-  }, []);
-
-  return { prefs, setPref, reset };
+  const { data, isLoading } = useApi<NotificationPrefs>(
+    "/api/notifications/preferences",
+  );
+  return {
+    prefs: data ?? DEFAULT_PREFS,
+    isLoading,
+  };
 }
-

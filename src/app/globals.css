@@ -318,3 +318,39 @@
   from { opacity: 0; transform: translateY(-2px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Sparkline utilities — tiny inline mini-charts (60×16 SVG) used in dense
+   list rows (e.g. the dashboard "Below reorder level" list, where each row
+   gets a per-item stock-movement sparkline). The companion React component
+   `src/components/erp/reorder-sparkline.tsx` consumes these classes; they
+   can also be used standalone on any inline `<svg class="sparkline">`. */
+/* ────────────────────────────────────────────────────────────────────────── */
+.sparkline {
+  display: inline-block;
+  vertical-align: middle;
+  width: 64px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+.sparkline-track {
+  stroke: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
+  stroke-width: 1;
+  fill: none;
+}
+.sparkline-bar {
+  fill: var(--chart-1);             /* emerald — positive net movement */
+  rx: 1;
+}
+.sparkline-bar-danger {
+  fill: var(--chart-5);             /* rose — net outward movement */
+}
+.sparkline-bar-muted {
+  fill: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+}
+.sparkline-baseline {
+  stroke: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}

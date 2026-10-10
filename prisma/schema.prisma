@@ -544,3 +544,18 @@ model LoginEvent {
 
   @@map("login_events")
 }
+
+// Per-user notification preferences. One row per user (userId is unique).
+// `prefs` is a JSON string of the `NotificationPrefs` shape (6 toggles) from
+// `src/lib/notification-prefs.ts`. Written by the PATCH
+// /api/notifications/preferences route via `savePrefs()` in
+// `src/lib/erp/notification-prefs-server.ts` (raw SQL — Prisma client may be
+// stale right after a schema push, so we don't rely on the typed accessor).
+model NotificationPref {
+  id        Int    @id @default(autoincrement())
+  userId    Int    @unique
+  prefs     String                 // JSON string of NotificationPrefs
+  updatedAt String
+
+  @@map("notification_prefs")
+}

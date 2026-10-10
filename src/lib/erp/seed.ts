@@ -89,10 +89,38 @@ const OPENING_STOCK: Receipt[] = [
   ["RM-CBL-HT", 1500, "CB-2609-008"], ["RM-CON-4P", 2000, "C4-2609-017"], ["RM-CON-5P", 320, "C5-2609-009"], ["RM-CON-6P", 260, "C6-2609-003"], ["RM-GRM-SIL", 3000, null],
 ];
 
+// Spread production runs across the last 14 days so the trend chart shows a
+// contiguous, fuller time-series. Dates are computed at seed time as
+// `YYYY-MM-DD` UTC day offsets from "today" — matching the trend API's
+// `startDate()`/`dateRange()` logic, so the serials fall inside the
+// `serials WHERE date >= today - (days-1)` window.
+const isoOffset = (offset: number): string => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
+};
+
+// Same total good/reject as the original concentrated seed (707 good / 23
+// reject across serial-tracked FG items + the SFG-NOX-PRB sub-assembly run),
+// just distributed one run per day. Three items get a second, smaller run on
+// a different day (FG-NOX-BS6, FG-EGTS-TC, FG-LD6000-D3, FG-DPS-SENT) — see
+// the `historySeen` counter in the seed loop for the orderNo dedup suffix.
 const HISTORY: History[] = [
-  ["SFG-NOX-PRB", 60, 58, 2, "2026-09-25"], ["FG-NOX-BS6", 50, 47, 3, "2026-09-28"], ["FG-EGTS-TC", 200, 196, 4, "2026-09-29"], ["FG-EGTS-NTC", 60, 59, 1, "2026-09-30"],
-  ["FG-LD6000-D1", 120, 116, 4, "2026-10-01"], ["FG-LD6000-D3", 60, 58, 2, "2026-10-02"], ["FG-LD6549", 70, 66, 4, "2026-10-02"], ["FG-DPS-SENT", 80, 79, 1, "2026-10-03"], ["FG-UQS-US", 40, 37, 3, "2026-10-06"],
-  ["TTT000002", 30, 29, 1, "2026-10-07"], ["TTT000004", 20, 20, 0, "2026-10-07"],
+  ["SFG-NOX-PRB", 60, 58, 2, isoOffset(13)],
+  ["FG-NOX-BS6", 20, 19, 1, isoOffset(13)],
+  ["FG-EGTS-TC", 100, 98, 2, isoOffset(12)],
+  ["FG-EGTS-NTC", 60, 59, 1, isoOffset(11)],
+  ["FG-LD6000-D1", 120, 116, 4, isoOffset(10)],
+  ["FG-LD6000-D3", 30, 29, 1, isoOffset(9)],
+  ["FG-LD6549", 70, 66, 4, isoOffset(8)],
+  ["FG-DPS-SENT", 40, 39, 1, isoOffset(7)],
+  ["FG-UQS-US", 40, 37, 3, isoOffset(6)],
+  ["FG-EGTS-TC", 100, 98, 2, isoOffset(5)],
+  ["TTT000002", 30, 29, 1, isoOffset(4)],
+  ["FG-LD6000-D3", 30, 29, 1, isoOffset(3)],
+  ["TTT000004", 20, 20, 0, isoOffset(2)],
+  ["FG-NOX-BS6", 30, 28, 2, isoOffset(1)],
+  ["FG-DPS-SENT", 40, 40, 0, isoOffset(0)],
 ];
 
 let _seeded = false;
@@ -189,8 +217,16 @@ export async function ensureSeeded(force = false) {
   await db.stockTxn.create({ data: { date: "2026-10-05", itemId: I["RM-TC-K"], warehouseId: W.QC, qty: 60, txnType: "RECEIPT", ref: "GRN-2610-004", batchNo: "TC-2610-118", unitCost: 420 } });
 
   // ---------- Production history (completed orders w/ serials) ----------
+  // `historySeen` deduplicates orderNos: when an item appears more than once
+  // in HISTORY (a second, smaller run on a different day), the 2nd+ order gets
+  // a `-R{n}` suffix so the `orderNo` UNIQUE constraint isn't violated.
+  const historySeen: Record<string, number> = {};
   for (const [code, q, g, r, d] of HISTORY) {
-    const orderNo = `PO-26-${String(Object.keys(I).indexOf(code) + 1).padStart(4, "0")}`;
+    historySeen[code] = (historySeen[code] ?? 0) + 1;
+    const idx = Object.keys(I).indexOf(code) + 1;
+    const orderNo = historySeen[code] === 1
+      ? `PO-26-${String(idx).padStart(4, "0")}`
+      : `PO-26-${String(idx).padStart(4, "0")}-R${historySeen[code]}`;
     const order = await db.productionOrder.create({ data: { orderNo, itemId: I[code], qty: q, dueDate: d, status: "IN_PROGRESS", warehouseId: code.startsWith("SFG") ? W.WIP : W.FG, consumedBatches: "[]" } });
     // issue material FIFO (skip detail; just mark consumed)
     await db.stockTxn.create({ data: { date: d, itemId: I[code], warehouseId: order.warehouseId, qty: g, txnType: "PROD_OUT", ref: orderNo, batchNo: orderNo, unitCost: await rolledCost(I[code]) } });

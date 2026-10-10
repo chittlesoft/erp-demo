@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   FileClock,
@@ -23,8 +24,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useApi, apiRequest } from "@/lib/erp/client";
+import { useToast } from "@/hooks/use-toast";
 import {
-  useNotificationPrefs,
+  DEFAULT_PREFS,
   type NotificationPrefs,
 } from "@/lib/notification-prefs";
 
@@ -73,6 +77,8 @@ const PREF_ROWS: {
   },
 ];
 
+const PREFS_QUERY_KEY = ["/api/notifications/preferences"];
+
 /** Trigger button + dialog for per-user notification preferences. */
 export function NotificationPreferences({
   trigger,
@@ -80,7 +86,65 @@ export function NotificationPreferences({
   /** Optional custom trigger; defaults to a small ghost icon button. */
   trigger?: ReactNode;
 }) {
-  const { prefs, setPref, reset } = useNotificationPrefs();
+  const { data: serverPrefs, isLoading } = useApi<NotificationPrefs>(
+    "/api/notifications/preferences",
+  );
+  // Optimistic local state — mirrors the server prefs while a PATCH is in
+  // flight so the Switch reflects the user's click instantly. Reset to the
+  // server value whenever the server catches up (success or refetch).
+  const [optimistic, setOptimistic] = useState<NotificationPrefs | null>(null);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const prefs: NotificationPrefs = optimistic ?? serverPrefs ?? DEFAULT_PREFS;
+
+  const patch = useMutation({
+    mutationFn: async (next: NotificationPrefs) => {
+      const res = await apiRequest(
+        "PATCH",
+        "/api/notifications/preferences",
+        next,
+      );
+      return (await res.json()) as NotificationPrefs;
+    },
+    // Optimistically populate the cache so the bell popover re-renders with
+    // the new value before the server responds.
+    onMutate: async (next) => {
+      await qc.cancelQueries({ queryKey: PREFS_QUERY_KEY });
+      const prev = qc.getQueryData<NotificationPrefs>(PREFS_QUERY_KEY);
+      qc.setQueryData<NotificationPrefs>(PREFS_QUERY_KEY, next);
+      return { prev };
+    },
+    onError: (e: Error, _next, ctx) => {
+      // Roll the cache back + drop the optimistic overlay so the Switch
+      // snaps to the last-known-good server value.
+      if (ctx?.prev) qc.setQueryData(PREFS_QUERY_KEY, ctx.prev);
+      setOptimistic(null);
+      toast({
+        title: "Couldn't save preferences",
+        description: e.message,
+        variant: "destructive",
+      });
+    },
+    onSuccess: (saved) => {
+      setOptimistic(null);
+      qc.setQueryData<NotificationPrefs>(PREFS_QUERY_KEY, saved);
+      qc.invalidateQueries({ queryKey: PREFS_QUERY_KEY });
+      toast({ title: "Notification preferences saved" });
+    },
+  });
+
+  const setPref = (key: keyof NotificationPrefs, value: boolean) => {
+    const next: NotificationPrefs = { ...prefs, [key]: value };
+    setOptimistic(next);
+    patch.mutate(next);
+  };
+
+  const reset = () => {
+    const next: NotificationPrefs = { ...DEFAULT_PREFS };
+    setOptimistic(next);
+    patch.mutate(next);
+  };
 
   const enabledCount = useMemo(
     () =>
@@ -115,33 +179,42 @@ export function NotificationPreferences({
           </DialogDescription>
         </DialogHeader>
 
-        <ul className="divide-y rounded-md border">
-          {PREF_ROWS.map((row) => {
-            const Icon = row.icon;
-            const checked = prefs[row.key];
-            return (
-              <li
-                key={row.key}
-                className="flex items-center gap-3 px-3 py-2.5"
-              >
-                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium leading-tight">
-                    {row.label}
+        {isLoading ? (
+          <div className="space-y-2">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : (
+          <ul className="divide-y rounded-md border">
+            {PREF_ROWS.map((row) => {
+              const Icon = row.icon;
+              const checked = prefs[row.key];
+              return (
+                <li
+                  key={row.key}
+                  className="flex items-center gap-3 px-3 py-2.5"
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium leading-tight">
+                      {row.label}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                      {row.desc}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                    {row.desc}
-                  </div>
-                </div>
-                <Switch
-                  checked={checked}
-                  onCheckedChange={(v) => setPref(row.key, v)}
-                  aria-label={`Toggle ${row.label}`}
-                />
-              </li>
-            );
-          })}
-        </ul>
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(v) => setPref(row.key, v)}
+                    disabled={patch.isPending}
+                    aria-label={`Toggle ${row.label}`}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
@@ -153,6 +226,7 @@ export function NotificationPreferences({
             size="sm"
             className="h-7 gap-1 px-2 text-xs"
             onClick={reset}
+            disabled={patch.isPending}
           >
             <RotateCcw className="h-3 w-3" />
             Reset to defaults

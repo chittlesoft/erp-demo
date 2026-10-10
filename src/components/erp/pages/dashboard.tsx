@@ -1,17 +1,44 @@
 "use client";
 import { useApi, inr, qty, lookup, LINE_LABEL } from "@/lib/erp/client";
 import type { Dashboard, Summary, Phase3Summary, ItemRow, ProductionOrder } from "@/lib/erp/shared";
+import type { ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Kpi, Empty, StatusBadge, SectionCard } from "../shared";
+import { Kpi, Empty, StatusBadge, SectionCard, StatTrend } from "../shared";
 import { useNav } from "@/lib/erp/nav";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { useAction } from "@/lib/erp/client";
 import { Button } from "@/components/ui/button";
 import { ActivityWidget } from "../activity-widget";
 import { ProductionTrendChart } from "../production-trend-chart";
+import { ReorderSparkline } from "../reorder-sparkline";
 import { useSession } from "next-auth/react";
 import { asRole, isAdmin } from "@/lib/erp/auth-shared";
+
+/** Mirrors the `?summary=true` response from /api/analytics/trend. */
+type TrendSummary = {
+  today: { date: string; good: number; reject: number; fpy: number | null };
+  yesterday: { date: string; good: number; reject: number; fpy: number | null };
+  deltaGood: number;
+  deltaReject: number;
+  deltaFpy: number | null;
+};
+
+/**
+ * Wraps a `Kpi` card with an optional `trend` indicator pinned to the
+ * top-right corner (same row as the label). Used for today-vs-yesterday deltas
+ * on the "Sensors produced (good)" + "First-pass yield" cards. When `trend` is
+ * omitted, renders the bare Kpi so the grid layout is unchanged.
+ */
+function KpiWithTrend({ children, trend }: { children: ReactNode; trend?: ReactNode }) {
+  if (!trend) return <>{children}</>;
+  return (
+    <div className="relative">
+      {children}
+      <div className="absolute top-3 right-3">{trend}</div>
+    </div>
+  );
+}
 
 function SectionLabel({ children }: { children: string }) {
   return (
@@ -26,6 +53,10 @@ export default function DashboardPage() {
   const { data: orders } = useApi<ProductionOrder[]>("/api/orders");
   const p3 = useApi<Phase3Summary>("/api/phase3/summary").data;
   const sum = useApi<Summary>("/api/summary").data;
+  // Today vs yesterday deltas for the "Sensors produced (good)" + "First-pass
+  // yield" KPI indicators. `?summary=true` returns the trend array PLUS the
+  // delta fields; the dashboard's chart keeps using the bare array endpoint.
+  const deltas = useApi<TrendSummary>("/api/analytics/trend?days=14&summary=true").data;
   const items = lookup(useApi<ItemRow[]>("/api/items").data);
   const { go } = useNav();
   const reseed = useAction("POST", "/api/seed", "Demo data reloaded");
@@ -69,8 +100,16 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi label="Inventory value" value={inr(data.stockValue)} sub={`${data.itemCount} items`} testid="text-kpi-stock-value" tone="emerald" />
           <Kpi label="Open production orders" value={String(data.openOrders)} sub={`${data.inProgress} on shop floor`} testid="text-kpi-open-orders" tone="neutral" />
-          <Kpi label="Sensors produced (good)" value={qty(data.unitsGood)} sub={`${data.unitsRejected} rejected at EOL`} testid="text-kpi-units" tone="emerald" />
-          <Kpi label="First-pass yield" value={data.fpy == null ? "—" : `${data.fpy}%`} sub="Completed orders" testid="text-kpi-fpy" tone="neutral" />
+          <KpiWithTrend
+            trend={deltas && (deltas.today.good + deltas.today.reject + deltas.yesterday.good + deltas.yesterday.reject) > 0 ? <StatTrend delta={deltas.deltaGood} suffix="" /> : undefined}
+          >
+            <Kpi label="Sensors produced (good)" value={qty(data.unitsGood)} sub={`${data.unitsRejected} rejected at EOL`} testid="text-kpi-units" tone="emerald" />
+          </KpiWithTrend>
+          <KpiWithTrend
+            trend={deltas && deltas.deltaFpy !== null ? <StatTrend delta={deltas.deltaFpy} suffix="%" /> : undefined}
+          >
+            <Kpi label="First-pass yield" value={data.fpy == null ? "—" : `${data.fpy}%`} sub="Completed orders" testid="text-kpi-fpy" tone="neutral" />
+          </KpiWithTrend>
         </div>
       </section>
 
@@ -150,6 +189,9 @@ export default function DashboardPage() {
                   <div className="min-w-0">
                     <div className="font-mono text-xs">{l.code}</div>
                     <div className="text-xs text-muted-foreground truncate">{l.name}</div>
+                  </div>
+                  <div className="shrink-0 hidden sm:block" title="Recent stock movement (14 days)">
+                    <ReorderSparkline itemId={l.id} />
                   </div>
                   <div className="ml-auto text-right tabular-nums text-xs">
                     <span className="font-semibold text-destructive">{qty(l.onHand)}</span>
