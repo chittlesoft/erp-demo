@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApi, useAction } from "@/lib/erp/client";
 import { STATES, validGstin, type Party } from "@/lib/erp/shared";
-import { PageIntro, Empty, StatusBadge } from "../shared";
+import { PageIntro, Empty, StatusBadge, SectionCard } from "../shared";
 
 const ROLES = ["CUSTOMER", "VENDOR", "JOBWORKER"];
 const ROLE_LABEL: Record<string, string> = { CUSTOMER: "Customer", VENDOR: "Vendor", JOBWORKER: "Job worker" };
@@ -64,39 +64,70 @@ export default function PartiesPage() {
   const [role, setRole] = useState("all");
   const [edit, setEdit] = useState<Party | null>(null);
   const [open, setOpen] = useState(false);
-  const rows = (data ?? []).filter((p) => (role === "all" || p.role === role) && (p.code + p.name + p.gstin).toLowerCase().includes(q.toLowerCase()));
+  const all = data ?? [];
+  const rows = all.filter((p) => (role === "all" || p.role === role) && (p.code + p.name + p.gstin).toLowerCase().includes(q.toLowerCase()));
+  const hasFilters = q !== "" || role !== "all";
   return (
     <>
       <PageIntro actions={<Button onClick={() => { setEdit(null); setOpen(true); }}><Plus className="h-4 w-4 mr-1" />New party</Button>}>
-        Customers, vendors and job workers with GSTIN validation (format + mod-36 check digit + state-code match). Intra-state → CGST+SGST; inter-state → IGST.
+        Customers, vendors and job workers with GSTIN validation (format + mod-35 check digit + state-code match). Intra-state → CGST+SGST; inter-state → IGST.
       </PageIntro>
-      <div className="rounded-xl border bg-card shadow-xs">
+      <SectionCard bodyClassName="p-0">
         <div className="flex flex-wrap gap-2 p-3 border-b">
-          <div className="relative flex-1 min-w-[200px]"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input placeholder="Search code, name or GSTIN" className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <Select value={role} onValueChange={setRole}><SelectTrigger className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All roles</SelectItem>{ROLES.map((r) => <SelectItem key={r} value={r}>{ROLE_LABEL[r]}</SelectItem>)}</SelectContent></Select>
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search code, name or GSTIN" className="pl-8" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <Select value={role} onValueChange={setRole}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              {ROLES.map((r) => <SelectItem key={r} value={r}>{ROLE_LABEL[r]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="ml-auto text-xs text-muted-foreground self-center tabular-nums">
+            {rows.length} of {all.length} parties
+          </div>
         </div>
         <div className="overflow-x-auto scroll-thin">
-          {isLoading ? <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9" />)}</div> : rows.length === 0 ? <Empty>No parties</Empty> : (
+          {isLoading ? (
+            <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9" />)}</div>
+          ) : rows.length === 0 ? (
+            <Empty>{hasFilters ? "No parties match your filters" : "No parties yet — click \u201CNew party\u201D to add the first one."}</Empty>
+          ) : (
             <table className="zebra w-full text-sm">
-              <thead><tr className="text-xs text-muted-foreground border-b">{["Code", "Name", "Role", "GSTIN", "State", "City", "Distance", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
+              <thead>
+                <tr className="text-xs text-muted-foreground border-b">
+                  {["Code", "Name", "Role", "GSTIN", "State", "City", "Distance", ""].map((h, i) => (
+                    <th key={i} className={`font-medium px-5 py-2 ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
               <tbody>
                 {rows.map((p) => (
                   <tr key={p.id} className="border-b last:border-0">
                     <td className="px-5 py-2 font-mono text-xs">{p.code}</td>
-                    <td className="px-5">{p.name}<span className="text-xs text-muted-foreground block">{p.address}, {p.city} {p.pincode}</span></td>
+                    <td className="px-5">
+                      <span>{p.name}</span>
+                      <span className="text-xs text-muted-foreground block">{p.address}, {p.city} {p.pincode}</span>
+                    </td>
                     <td className="px-5"><StatusBadge status={p.role} /></td>
                     <td className="px-5 font-mono text-xs">{p.gstin}</td>
                     <td className="px-5 text-xs">{STATES[p.stateCode] ?? p.stateCode}</td>
                     <td className="px-5 text-xs">{p.city}</td>
                     <td className="px-5 text-xs text-right tabular-nums">{p.distanceKm} km</td>
-                    <td className="px-2"><Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true); }} aria-label="Edit"><Pencil className="h-3.5 w-3.5" /></Button></td>
+                    <td className="px-2">
+                      <Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true); }} aria-label="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
         </div>
-      </div>
+      </SectionCard>
       <PartyDialog party={edit} open={open} onOpenChange={setOpen} />
     </>
   );

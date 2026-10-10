@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ClipboardCheck, ShieldAlert, FileCheck2 } from "lucide-react";
+import { ClipboardCheck, ShieldAlert, FileCheck2, Pencil, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useApi, useAction, qty } from "@/lib/erp/client";
 import type { Inspection, Ncr, Ppap, ItemRow, Party } from "@/lib/erp/shared";
-import { PageIntro, Empty, StatusBadge } from "../shared";
+import { PageIntro, Empty, StatusBadge, SectionCard } from "../shared";
+import type { PlanRow, PendingRow, PdiReportDetail } from "@/lib/erp/pdi-shared";
+import { dmy } from "@/lib/erp/pdi-shared";
+import { PdiPlanDialog } from "../pdi-plan-dialog";
+import { PdiInspectionDialog } from "../pdi-inspection-dialog";
+import { PdiReportView } from "../pdi-report-view";
 
 export default function QualityPage() {
   const { data: inspections } = useApi<Inspection[]>("/api/phase3/inspections");
@@ -18,13 +23,19 @@ export default function QualityPage() {
   return (
     <>
       <PageIntro>
-        Incoming (IQC) inspection with AQL sampling, non-conformance (NCR) register with disposition, and PPAP status per OEM customer &amp; part.
+        Incoming (IQC) inspection with AQL sampling, non-conformance (NCR) register with disposition, PPAP status per OEM customer &amp; part, and pre-dispatch inspection (PDI) per finished-good part.
       </PageIntro>
       <Tabs defaultValue="iqc">
-        <TabsList><TabsTrigger value="iqc"><ClipboardCheck className="h-3.5 w-3.5 mr-1" />Inspections</TabsTrigger><TabsTrigger value="ncr"><ShieldAlert className="h-3.5 w-3.5 mr-1" />NCRs</TabsTrigger><TabsTrigger value="ppap"><FileCheck2 className="h-3.5 w-3.5 mr-1" />PPAP</TabsTrigger></TabsList>
+        <TabsList>
+          <TabsTrigger value="iqc"><ClipboardCheck className="h-3.5 w-3.5 mr-1" />Inspections</TabsTrigger>
+          <TabsTrigger value="ncr"><ShieldAlert className="h-3.5 w-3.5 mr-1" />NCRs</TabsTrigger>
+          <TabsTrigger value="ppap"><FileCheck2 className="h-3.5 w-3.5 mr-1" />PPAP</TabsTrigger>
+          <TabsTrigger value="pdi"><ClipboardCheck className="h-3.5 w-3.5 mr-1" />PDI</TabsTrigger>
+        </TabsList>
         <TabsContent value="iqc" className="mt-4"><InspectionList inspections={inspections ?? []} /></TabsContent>
         <TabsContent value="ncr" className="mt-4"><NcrList ncrs={ncrs ?? []} /></TabsContent>
         <TabsContent value="ppap" className="mt-4"><PpapList ppaps={ppaps ?? []} /></TabsContent>
+        <TabsContent value="pdi" className="mt-4"><PdiTab /></TabsContent>
       </Tabs>
     </>
   );
@@ -140,6 +151,183 @@ function PpapList({ ppaps }: { ppaps: (Ppap & { customer: Party })[] }) {
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+// ===================== PDI tab =====================
+function PdiTab() {
+  const { data: plans, isLoading: plansLoading } = useApi<PlanRow[]>("/api/phase3/pdi/plans");
+  const { data: pending, isLoading: pendingLoading } = useApi<PendingRow[]>("/api/phase3/pdi/pending");
+  const { data: reports, isLoading: reportsLoading } = useApi<PdiReportDetail[]>("/api/phase3/pdi/reports");
+
+  const [editItem, setEditItem] = useState<{ id: number; code: string; name: string } | null>(null);
+  const [inspectRow, setInspectRow] = useState<PendingRow | null>(null);
+  const [viewReportId, setViewReportId] = useState<number | null>(null);
+
+  return (
+    <div className="space-y-4">
+      {/* Plans */}
+      <SectionCard
+        title="PDI plans"
+        subtitle="Characteristics checked before dispatch, per finished-good part. Parts with a plan cannot be invoiced until an accepted PDI covers the dispatch quantity."
+        bodyClassName="overflow-x-auto scroll-thin"
+      >
+        {plansLoading ? (
+          <Skeleton className="h-32" />
+        ) : !plans || plans.length === 0 ? (
+          <Empty>No finished-good items found.</Empty>
+        ) : (
+          <table className="zebra w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b">
+                <th className="text-left font-medium px-5 py-2">Part</th>
+                <th className="text-left font-medium px-3">Customer part no.</th>
+                <th className="text-left font-medium px-3">Drg. rev</th>
+                <th className="text-left font-medium px-3">Characteristics</th>
+                <th className="text-left font-medium px-3">Plan status</th>
+                <th className="px-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map((p) => (
+                <tr key={p.itemId} className="border-b last:border-0">
+                  <td className="px-5 py-2">
+                    <div className="font-mono text-xs">{p.code}</div>
+                    <div className="text-xs text-muted-foreground">{p.name}</div>
+                  </td>
+                  <td className="px-3 text-xs font-mono">{p.customerPartNo ?? "—"}</td>
+                  <td className="px-3 text-xs">{p.plan?.drgRev ?? "—"}</td>
+                  <td className="px-3 text-xs tabular-nums">{p.plan?.chars.length ?? 0}</td>
+                  <td className="px-3">
+                    {p.plan ? (
+                      <StatusBadge status="ACTIVE" />
+                    ) : (
+                      <StatusBadge status="PENDING" />
+                    )}
+                  </td>
+                  <td className="px-3 text-right">
+                    <Button size="sm" variant="outline" onClick={() => setEditItem({ id: p.itemId, code: p.code, name: p.name })}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit plan
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
+
+      {/* Pending inspection */}
+      <SectionCard
+        title="Awaiting pre-dispatch inspection"
+        subtitle="Open sales-order lines for parts with a PDI plan. Complete a PDI for the dispatch quantity before invoicing."
+        bodyClassName="overflow-x-auto scroll-thin"
+      >
+        {pendingLoading ? (
+          <Skeleton className="h-32" />
+        ) : !pending || pending.length === 0 ? (
+          <Empty>Nothing awaiting PDI. Open sales-order lines for parts with a PDI plan appear here.</Empty>
+        ) : (
+          <table className="zebra w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b">
+                <th className="text-left font-medium px-5 py-2">Sales order</th>
+                <th className="text-left font-medium px-3">Part</th>
+                <th className="text-right font-medium px-3">Pending</th>
+                <th className="text-right font-medium px-3">FG stock</th>
+                <th className="text-right font-medium px-3">PDI done</th>
+                <th className="px-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((r) => (
+                <tr key={r.soLineId} className="border-b last:border-0">
+                  <td className="px-5 py-2">
+                    <div className="font-mono text-xs">{r.soNo}</div>
+                    <div className="text-xs text-muted-foreground">{r.customer}</div>
+                  </td>
+                  <td className="px-3">
+                    <div className="font-mono text-xs">{r.itemCode}</div>
+                    <div className="text-xs text-muted-foreground">{r.itemName}{r.customerPartNo && ` · ${r.customerPartNo}`}</div>
+                  </td>
+                  <td className="px-3 text-right tabular-nums">{qty(r.pending)}</td>
+                  <td className={`px-3 text-right tabular-nums ${r.fgStock < r.toInspect ? "text-destructive" : ""}`}>{qty(r.fgStock)}</td>
+                  <td className="px-3 text-right tabular-nums">{qty(r.covered)}</td>
+                  <td className="px-3 text-right">
+                    {r.toInspect > 0 ? (
+                      <Button size="sm" onClick={() => setInspectRow(r)}>
+                        <ClipboardCheck className="h-3.5 w-3.5 mr-1" /> Inspect
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">Ready to invoice</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
+
+      {/* Reports */}
+      <SectionCard
+        title="PDI reports"
+        subtitle="Completed pre-dispatch inspections (format TPE/IMS/FR/78). Click View to open / print the report."
+        bodyClassName="overflow-x-auto scroll-thin"
+      >
+        {reportsLoading ? (
+          <Skeleton className="h-32" />
+        ) : !reports || reports.length === 0 ? (
+          <Empty>No PDI reports yet.</Empty>
+        ) : (
+          <table className="zebra w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b">
+                <th className="text-left font-medium px-5 py-2">PDI no.</th>
+                <th className="text-left font-medium px-3">Customer</th>
+                <th className="text-left font-medium px-3">Part</th>
+                <th className="text-right font-medium px-3">Qty</th>
+                <th className="text-right font-medium px-3">Sample</th>
+                <th className="text-left font-medium px-3">Result</th>
+                <th className="text-left font-medium px-3">Invoice</th>
+                <th className="px-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {reports.map((r) => (
+                <tr key={r.id} className="border-b last:border-0">
+                  <td className="px-5 py-2">
+                    <div className="font-mono text-xs">{r.pdiNo}</div>
+                    <div className="text-[11px] text-muted-foreground">{dmy(r.date)} · {r.inspector}</div>
+                  </td>
+                  <td className="px-3 text-xs">{r.customer}<div className="text-[11px] text-muted-foreground font-mono">{r.soNo}</div></td>
+                  <td className="px-3"><div className="font-mono text-xs">{r.itemCode}</div><div className="text-[11px] text-muted-foreground">{r.itemName}</div></td>
+                  <td className="px-3 text-right tabular-nums">{qty(r.qty)}</td>
+                  <td className="px-3 text-right tabular-nums">{r.sample}</td>
+                  <td className="px-3"><StatusBadge status={r.result} /></td>
+                  <td className="px-3 text-xs">
+                    {r.invoiceNo ? (
+                      <span className="font-mono">{r.invoiceNo}</span>
+                    ) : (
+                      <span className="text-muted-foreground">{r.result === "ACCEPT" ? "Awaiting invoice" : "—"}</span>
+                    )}
+                  </td>
+                  <td className="px-3 text-right">
+                    <Button size="sm" variant="outline" onClick={() => setViewReportId(r.id)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" /> View
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </SectionCard>
+
+      <PdiPlanDialog item={editItem} onClose={() => setEditItem(null)} />
+      <PdiInspectionDialog row={inspectRow} onClose={() => setInspectRow(null)} />
+      <PdiReportView reportId={viewReportId} onClose={() => setViewReportId(null)} />
     </div>
   );
 }

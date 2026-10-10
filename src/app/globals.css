@@ -242,10 +242,38 @@
   padding-top: 0.5rem;
 }
 
-/* Print: hide chrome, show only documents (invoices, pick lists, labels) */
+/* Print: hide chrome, show only documents (invoices, pick lists, labels).
+   The sidebar/header/footer already carry .no-print. The .print-area wrapper
+   becomes the only visible content on the page; we also neutralise its
+   dialog-scroll container so the entire invoice prints on a single A4 page. */
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
-  .print-area { position: absolute; inset: 0; margin: 0; }
+  .print-area {
+    position: static !important;
+    inset: auto !important;
+    margin: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
   .no-print { display: none !important; }
+  body { background: #fff !important; }
+  /* Tighter A4 margins so the invoice fits one page. */
+  @page { margin: 12mm; }
+  /* Hide all dialogs except the printing one (the invoice dialog wrapper
+     sits inside .print-area so it stays visible; others get hidden). */
+  [data-slot="dialog-overlay"] { display: none !important; }
+  /* Avoid breaking inside the line-items rows. */
+  .print-area table tr { break-inside: avoid; }
+  .print-area table thead { display: table-header-group; }
+}
+
+/* Scan-feedback container — inline alert under the scan input. Uses shadcn
+   Alert's grid layout (icon col + content col) and adds a subtle slide-in. */
+.scan-feedback {
+  animation: scan-feedback-in 150ms ease-out;
+}
+@keyframes scan-feedback-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
