@@ -32,7 +32,7 @@ export default function ProductionPage() {
       <div className="rounded-xl border bg-card shadow-xs">
         <div className="overflow-x-auto scroll-thin">
           {isLoading ? <div className="p-4 space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-9" />)}</div> : (orders ?? []).length === 0 ? <Empty>No orders</Empty> : (
-            <table className="w-full text-sm">
+            <table className="zebra w-full text-sm">
               <thead><tr className="text-xs text-muted-foreground border-b">
                 {["Order", "Product", "Qty", "Good", "Rej", "Due", "Status", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${(i >= 2 && i <= 5) ? "text-right" : "text-left"}`}>{h}</th>)}
               </tr></thead>
@@ -41,7 +41,7 @@ export default function ProductionPage() {
                   const it = itemMap.get(o.itemId);
                   const canRelease = it?.tracking === "serial" && o.status === "PLANNED";
                   return (
-                    <tr key={o.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr key={o.id} className="border-b last:border-0">
                       <td className="px-5 py-2 font-mono text-xs">{o.orderNo}</td>
                       <td className="px-5"><span className="font-mono text-xs">{it?.code}</span><span className="text-xs text-muted-foreground block">{it?.name}</span></td>
                       <td className="px-5 text-right tabular-nums">{qty(o.qty)}</td>
@@ -114,7 +114,7 @@ function DetailDialog({ order, onClose, onComplete }: { order: ProductionOrder; 
           </div>
           <div>
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">BOM requirements (net of available stock)</h3>
-            <table className="w-full text-sm border rounded-md">
+            <table className="zebra w-full text-sm table-compact border rounded-md">
               <thead><tr className="text-xs text-muted-foreground border-b">{["Component", "Required", "Available", "Shortage"].map((h, i) => <th key={i} className={`font-medium px-3 py-1.5 ${i >= 1 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
               <tbody>
                 {(reqs ?? []).map((r) => (

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, FileText, PackageCheck } from "lucide-react";
+import { Plus, FileText, PackageCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,17 +41,17 @@ function POList({ pos, items, vendors, indents }: { pos: (PurchaseOrder & { vend
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase orders</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><Plus className="h-3.5 w-3.5 mr-1" />New PO</Button></div></div>
       <div className="overflow-x-auto scroll-thin">
         {pos.length === 0 ? <Empty>No purchase orders</Empty> : (
-          <table className="w-full text-sm">
-            <thead><tr className="text-xs text-muted-foreground border-b">{["PO no.", "Vendor", "Date", "Lines", "Value", "Status", ""].map((h, i) => <th key={i} className="font-medium px-5 py-2 text-left">{h}</th>)}</tr></thead>
+          <table className="zebra w-full text-sm">
+            <thead><tr className="text-xs text-muted-foreground border-b">{["PO no.", "Vendor", "Date", "Lines", "Value", "Status", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 4 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {pos.map((po) => {
                 const value = po.lines.reduce((s, l) => s + l.qty * l.rate, 0);
                 return (
-                  <tr key={po.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={po.id} className="border-b last:border-0">
                     <td className="px-5 py-2 font-mono text-xs">{po.poNo}</td>
                     <td className="px-5">{po.vendor.name}</td>
                     <td className="px-5 text-xs tabular-nums">{po.date}</td>
-                    <td className="px-5 text-xs">{po.lines.length}</td>
+                    <td className="px-5 text-xs tabular-nums">{po.lines.length}</td>
                     <td className="px-5 text-right tabular-nums">{inr2(value)}</td>
                     <td className="px-5"><StatusBadge status={po.status} /></td>
                     <td className="px-5 text-xs text-muted-foreground">{po.grns.length} GRN{po.grns.length !== 1 ? "s" : ""}</td>
@@ -94,7 +94,7 @@ function PODialog({ open, onOpenChange, items, vendors, indents }: { open: boole
                 <Select value={l.itemId} onValueChange={(v) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, itemId: v, rate: x.rate || String(items.find((it) => it.id === Number(v))?.stdCost ?? "") } : x))}><SelectTrigger className="col-span-7"><SelectValue placeholder="Item" /></SelectTrigger><SelectContent className="max-h-60">{items.map((it) => <SelectItem key={it.id} value={String(it.id)}>{it.code} — {it.name}</SelectItem>)}</SelectContent></Select>
                 <Input className="col-span-2" type="number" placeholder="Qty" value={l.qty} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))} />
                 <Input className="col-span-2" type="number" placeholder="Rate" value={l.rate} onChange={(e) => setLines((ls) => ls.map((x, j) => j === i ? { ...x, rate: e.target.value } : x))} />
-                <Button type="button" variant="ghost" size="icon" className="col-span-1" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}>×</Button>
+                <Button type="button" variant="ghost" size="icon" className="col-span-1" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Remove line"><X className="h-3.5 w-3.5" /></Button>
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={() => setLines((ls) => [...ls, { itemId: "", qty: "", rate: "" }])}><Plus className="h-3.5 w-3.5 mr-1" />Add line</Button>
@@ -120,11 +120,11 @@ function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Goods receipt notes</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><PackageCheck className="h-3.5 w-3.5 mr-1" />New GRN</Button></div></div>
       <div className="overflow-x-auto scroll-thin">
         {grns.length === 0 ? <Empty>No GRNs</Empty> : (
-          <table className="w-full text-sm">
+          <table className="zebra w-full text-sm">
             <thead><tr className="text-xs text-muted-foreground border-b">{["GRN no.", "Vendor", "Date", "Vendor inv.", "Taxable", "Total", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i >= 4 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {grns.map((g) => (
-                <tr key={g.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={g.id} className="border-b last:border-0">
                   <td className="px-5 py-2 font-mono text-xs">{g.grnNo}</td>
                   <td className="px-5">{g.po.vendor.name}</td>
                   <td className="px-5 text-xs tabular-nums">{g.date}</td>
@@ -184,11 +184,11 @@ function IndentList({ indents }: { indents: (Indent & { item: ItemRow })[] }) {
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase indents</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />New indent</Button></div></div>
       <div className="overflow-x-auto scroll-thin">
         {indents.length === 0 ? <Empty>No indents</Empty> : (
-          <table className="w-full text-sm">
+          <table className="zebra w-full text-sm">
             <thead><tr className="text-xs text-muted-foreground border-b">{["Indent", "Item", "Qty", "Required by", "Status"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 2 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {indents.map((i) => (
-                <tr key={i.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={i.id} className="border-b last:border-0">
                   <td className="px-5 py-2 font-mono text-xs">{i.indentNo}</td>
                   <td className="px-5"><span className="font-mono text-xs">{i.item.code}</span><span className="text-xs text-muted-foreground block">{i.item.name}</span></td>
                   <td className="px-5 text-right tabular-nums">{qty(i.qty)} {i.item.uom}</td>

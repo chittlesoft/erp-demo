@@ -77,7 +77,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 )}
                 <button
                   onClick={() => go(n.href)}
-                  className={`w-full flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors ${active ? "bg-sidebar-accent text-white font-medium" : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-white"}`}
+                  className={`w-full flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors ${active ? "nav-active-bar bg-sidebar-accent text-white font-medium" : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-white"}`}
                 >
                   <n.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : ""}`} />
                   {n.label}
@@ -86,8 +86,9 @@ export function Layout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/50 leading-relaxed">
-          Coming next: user logins &amp; roles, HR, PostgreSQL, barcode scanners, test-bench integration
+        <div className="p-3 border-t border-sidebar-border text-[11px] leading-relaxed">
+          <div className="text-sidebar-foreground/50 text-[10px] uppercase tracking-wider font-medium mb-1">Roadmap</div>
+          <p className="text-sidebar-foreground/85">Coming next: user logins &amp; roles, HR, PostgreSQL, barcode scanners, test-bench integration</p>
         </div>
       </aside>
 
@@ -95,20 +96,22 @@ export function Layout({ children }: { children: ReactNode }) {
 
       <div className="flex-1 md:pl-60 min-w-0 flex flex-col">
         <header className="no-print sticky top-0 z-20 h-14 flex items-center gap-3 px-4 md:px-6 border-b bg-background/90 backdrop-blur">
-          <button className="md:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
-          <h1 className="text-base font-semibold">{current?.label ?? "Tau Power ERP"}</h1>
-          <div className="ml-auto flex items-center gap-2">
-            {cfg && !cfg.gstin && (
-              <button onClick={() => go("accounts")} className="text-[11px] rounded bg-accent text-accent-foreground px-2 py-1 font-medium">
-                Company GSTIN missing
-              </button>
-            )}
-            <CommandPaletteTrigger />
-            <span className="hidden sm:inline text-xs text-muted-foreground">Prototype · demo transactions</span>
-            <NotificationsBell />
-            <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
-              {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
+          <div className="w-full max-w-[1500px] mx-auto flex items-center gap-3">
+            <button className="md:hidden" onClick={() => setOpen(true)} aria-label="Open menu"><Menu className="h-5 w-5" /></button>
+            <h1 className="text-base font-semibold">{current?.label ?? "Tau Power ERP"}</h1>
+            <div className="ml-auto flex items-center gap-2">
+              {cfg && !cfg.gstin && (
+                <button onClick={() => go("accounts")} className="text-[11px] rounded bg-accent text-accent-foreground px-2 py-1 font-medium">
+                  Company GSTIN missing
+                </button>
+              )}
+              <CommandPaletteTrigger />
+              <span className="hidden sm:inline text-xs text-muted-foreground">Prototype · demo transactions</span>
+              <NotificationsBell />
+              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
+                {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6 max-w-[1500px] w-full mx-auto">{children}</main>

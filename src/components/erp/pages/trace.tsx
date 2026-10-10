@@ -60,7 +60,7 @@ export default function TracePage() {
                 </div>
                 <div className="rounded-xl border bg-card shadow-xs p-5">
                   <h3 className="text-sm font-semibold mb-2">Component batches consumed</h3>
-                  <table className="w-full text-sm">
+                  <table className="zebra w-full text-sm table-compact">
                     <thead><tr className="text-xs text-muted-foreground border-b">{["Component", "Batch", "Qty"].map((h, i) => <th key={i} className={`font-medium px-3 py-1.5 ${i === 2 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
                     <tbody>
                       {serial.data.components.map((c, i) => (

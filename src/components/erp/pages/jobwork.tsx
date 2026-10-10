@@ -42,17 +42,17 @@ export default function JobWorkPage() {
         <div className="px-5 pt-4 pb-2"><h2 className="text-sm font-semibold">Job workers (demo)</h2><p className="text-xs text-muted-foreground">GSTINs are placeholders — replace before go-live.</p></div>
         <div className="overflow-x-auto scroll-thin">
           {(jobworkers ?? []).length === 0 ? <Empty>No job workers registered</Empty> : (
-            <table className="w-full text-sm">
-              <thead><tr className="text-xs text-muted-foreground border-b">{["Code", "Name", "GSTIN", "State", "City", "Distance"].map((h, i) => <th key={i} className="font-medium px-5 py-2 text-left">{h}</th>)}</tr></thead>
+            <table className="zebra w-full text-sm">
+              <thead><tr className="text-xs text-muted-foreground border-b">{["Code", "Name", "GSTIN", "State", "City", "Distance"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 5 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
               <tbody>
                 {(jobworkers ?? []).map((j) => (
-                  <tr key={j.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={j.id} className="border-b last:border-0">
                     <td className="px-5 py-2 font-mono text-xs">{j.code}</td>
                     <td className="px-5">{j.name}</td>
                     <td className="px-5 font-mono text-xs">{j.gstin}</td>
                     <td className="px-5 text-xs">{j.stateCode}</td>
                     <td className="px-5 text-xs">{j.city}</td>
-                    <td className="px-5 text-xs tabular-nums">{j.distanceKm} km</td>
+                    <td className="px-5 text-xs text-right tabular-nums">{j.distanceKm} km</td>
                   </tr>
                 ))}
               </tbody>

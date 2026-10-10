@@ -137,11 +137,11 @@ export default function ShopFloorPage() {
         <div className="px-5 pt-4 pb-2"><h2 className="text-sm font-semibold">Orders on the shop floor</h2></div>
         <div className="overflow-x-auto scroll-thin">
           {(board.data?.orders ?? []).length === 0 ? <Empty>No active orders</Empty> : (
-            <table className="w-full text-sm">
+            <table className="zebra w-full text-sm">
               <thead><tr className="text-xs text-muted-foreground border-b">{["Order", "Product", "Progress (ops)", "Done", "Scrap", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${(i === 3 || i === 4) ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
               <tbody>
                 {(board.data?.orders ?? []).map((o) => (
-                  <tr key={o.order.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={o.order.id} className="border-b last:border-0">
                     <td className="px-5 py-2 font-mono text-xs">{o.order.orderNo}</td>
                     <td className="px-5"><span className="font-mono text-xs">{o.item.code}</span></td>
                     <td className="px-5"><div className="flex flex-wrap gap-1">{o.ops.map((op) => <span key={op.seq} className="text-[10px] rounded bg-muted px-1.5 py-0.5">{op.station}: {op.queued}q{op.hold ? `/${op.hold}h` : ""}</span>)}</div></td>

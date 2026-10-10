@@ -77,18 +77,18 @@ export default function PartiesPage() {
         </div>
         <div className="overflow-x-auto scroll-thin">
           {isLoading ? <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-9" />)}</div> : rows.length === 0 ? <Empty>No parties</Empty> : (
-            <table className="w-full text-sm">
-              <thead><tr className="text-xs text-muted-foreground border-b">{["Code", "Name", "Role", "GSTIN", "State", "City", "Distance", ""].map((h, i) => <th key={i} className="font-medium px-5 py-2 text-left">{h}</th>)}</tr></thead>
+            <table className="zebra w-full text-sm">
+              <thead><tr className="text-xs text-muted-foreground border-b">{["Code", "Name", "Role", "GSTIN", "State", "City", "Distance", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 6 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
               <tbody>
                 {rows.map((p) => (
-                  <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={p.id} className="border-b last:border-0">
                     <td className="px-5 py-2 font-mono text-xs">{p.code}</td>
                     <td className="px-5">{p.name}<span className="text-xs text-muted-foreground block">{p.address}, {p.city} {p.pincode}</span></td>
                     <td className="px-5"><StatusBadge status={p.role} /></td>
                     <td className="px-5 font-mono text-xs">{p.gstin}</td>
                     <td className="px-5 text-xs">{STATES[p.stateCode] ?? p.stateCode}</td>
                     <td className="px-5 text-xs">{p.city}</td>
-                    <td className="px-5 text-xs tabular-nums">{p.distanceKm} km</td>
+                    <td className="px-5 text-xs text-right tabular-nums">{p.distanceKm} km</td>
                     <td className="px-2"><Button variant="ghost" size="icon" onClick={() => { setEdit(p); setOpen(true); }} aria-label="Edit"><Pencil className="h-3.5 w-3.5" /></Button></td>
                   </tr>
                 ))}

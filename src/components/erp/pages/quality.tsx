@@ -49,11 +49,11 @@ function InspectionList({ inspections }: { inspections: Inspection[] }) {
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Incoming inspections (IQC)</h2><div className="ml-auto"><Button size="sm" onClick={() => setOpen(true)}><ClipboardCheck className="h-3.5 w-3.5 mr-1" />New inspection</Button></div></div>
       <div className="overflow-x-auto scroll-thin">
         {inspections.length === 0 ? <Empty>No inspections yet — goods are in QC quarantine awaiting release</Empty> : (
-          <table className="w-full text-sm">
+          <table className="zebra w-full text-sm">
             <thead><tr className="text-xs text-muted-foreground border-b">{["Date", "Ref", "Item", "Lot", "Sample", "Accepted", "Rejected", "Result"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${(i >= 3 && i <= 6) ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {inspections.map((i) => (
-                <tr key={i.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={i.id} className="border-b last:border-0">
                   <td className="px-5 py-2 font-mono text-xs">{i.date}</td>
                   <td className="px-5 text-xs"><span className="font-mono">{i.refNo}</span><span className="text-muted-foreground block">{i.refType}</span></td>
                   <td className="px-5 text-xs font-mono">{items?.find((x) => x.id === i.itemId)?.code ?? i.itemId}</td>
@@ -95,11 +95,11 @@ function NcrList({ ncrs }: { ncrs: Ncr[] }) {
       <div className="px-5 pt-4 pb-2"><h2 className="text-sm font-semibold">Non-conformance register (NCR)</h2></div>
       <div className="overflow-x-auto scroll-thin">
         {ncrs.length === 0 ? <Empty>No NCRs</Empty> : (
-          <table className="w-full text-sm">
-            <thead><tr className="text-xs text-muted-foreground border-b">{["Date", "Source", "Ref", "Qty", "Defect", "Disposition", "Status"].map((h, i) => <th key={i} className="font-medium px-5 py-2 text-left">{h}</th>)}</tr></thead>
+          <table className="zebra w-full text-sm">
+            <thead><tr className="text-xs text-muted-foreground border-b">{["Date", "Source", "Ref", "Qty", "Defect", "Disposition", "Status"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
             <tbody>
               {ncrs.map((n) => (
-                <tr key={n.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={n.id} className="border-b last:border-0">
                   <td className="px-5 py-2 font-mono text-xs">{n.date}</td>
                   <td className="px-5 text-xs"><StatusBadge status={n.source} /></td>
                   <td className="px-5 font-mono text-xs">{n.refNo}</td>
@@ -123,11 +123,11 @@ function PpapList({ ppaps }: { ppaps: (Ppap & { customer: Party })[] }) {
       <div className="px-5 pt-4 pb-2"><h2 className="text-sm font-semibold">PPAP register</h2></div>
       <div className="overflow-x-auto scroll-thin">
         {ppaps.length === 0 ? <Empty>No PPAP records — seed data is illustrative</Empty> : (
-          <table className="w-full text-sm">
+          <table className="zebra w-full text-sm">
             <thead><tr className="text-xs text-muted-foreground border-b">{["Customer", "Item", "Level", "Submission", "PSW date", "Status"].map((h, i) => <th key={i} className="font-medium px-5 py-2 text-left">{h}</th>)}</tr></thead>
             <tbody>
               {ppaps.map((p) => (
-                <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={p.id} className="border-b last:border-0">
                   <td className="px-5 py-2">{p.customer.name}</td>
                   <td className="px-5 text-xs font-mono">{p.itemId}</td>
                   <td className="px-5 text-xs">Level {p.level}</td>

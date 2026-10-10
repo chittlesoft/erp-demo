@@ -71,7 +71,7 @@ export default function InventoryPage() {
         </div>
         <div className="overflow-x-auto scroll-thin">
           {isLoading ? <div className="p-4 space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div> : rows.length === 0 ? <Empty>No stock</Empty> : (
-            <table className="w-full text-sm">
+            <table className="zebra w-full text-sm">
               <thead><tr className="text-xs text-muted-foreground border-b">
                 {["Item", "Warehouse", "Batch", "Qty", "Value"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 3 || i === 4 ? "text-right" : "text-left"}`}>{h}</th>)}
               </tr></thead>
@@ -79,7 +79,7 @@ export default function InventoryPage() {
                 {rows.map((r, i) => {
                   const it = itemMap.get(r.itemId);
                   return (
-                    <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr key={i} className="border-b last:border-0">
                       <td className="px-5 py-2"><span className="font-mono text-xs">{it?.code}</span><span className="text-xs text-muted-foreground block">{it?.name}</span></td>
                       <td className="px-5 text-xs"><span className="font-mono">{r.warehouseCode}</span> <span className="text-muted-foreground">{r.warehouseName}</span></td>
                       <td className="px-5 font-mono text-xs">{r.batchNo ?? <span className="text-muted-foreground">—</span>}</td>
@@ -97,13 +97,13 @@ export default function InventoryPage() {
       <div className="rounded-xl border bg-card shadow-xs mt-4">
         <div className="px-5 pt-4 pb-2"><h2 className="text-sm font-semibold">Stock ledger (recent movements)</h2></div>
         <div className="overflow-x-auto max-h-80 overflow-y-auto scroll-thin">
-          <table className="w-full text-sm">
+          <table className="zebra w-full text-sm table-compact">
             <thead className="sticky top-0 bg-card"><tr className="text-xs text-muted-foreground border-b">
               {["Date", "Item", "Wh", "Qty", "Type", "Ref", "Batch"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>)}
             </tr></thead>
             <tbody>
               {(txns ?? []).slice(0, 80).map((t) => (
-                <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={t.id} className="border-b last:border-0">
                   <td className="px-5 py-1.5 font-mono text-xs">{t.date}</td>
                   <td className="px-5 text-xs font-mono">{itemMap.get(t.itemId)?.code ?? t.itemId}</td>
                   <td className="px-5 text-xs font-mono">{whMap.get(t.warehouseId)?.code}</td>

@@ -51,7 +51,7 @@ export default function BomPage() {
           </div>
           <div className="overflow-x-auto scroll-thin">
             {isLoading ? <div className="p-4 space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div> : lines.length === 0 ? <Empty>No components — add a line</Empty> : (
-              <table className="w-full text-sm">
+              <table className="zebra w-full text-sm">
                 <thead><tr className="text-xs text-muted-foreground border-b">
                   {["Component", "Qty", "Scrap %", "Unit cost", "Line cost", ""].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i >= 1 && i <= 4 ? "text-right" : "text-left"}`}>{h}</th>)}
                 </tr></thead>
@@ -60,7 +60,7 @@ export default function BomPage() {
                     const c = itemMap.get(l.componentItemId);
                     const lineCost = l.qty * (1 + l.scrapPct / 100) * (c?.hasBom ? c.rolledCost : c?.stdCost ?? 0);
                     return (
-                      <tr key={l.id} className="border-b last:border-0 hover:bg-muted/30">
+                      <tr key={l.id} className="border-b last:border-0">
                         <td className="px-5 py-2">
                           <span className="font-mono text-xs">{c?.code}</span>
                           <span className="text-xs text-muted-foreground block">{c?.name}</span>

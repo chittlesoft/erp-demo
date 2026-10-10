@@ -154,6 +154,15 @@
 .zebra tbody tr:hover {
   background: color-mix(in oklch, var(--accent) 70%, transparent);
 }
+/* Highlighted-row tint (e.g. shortage rows) must sit on top of zebra even/odd.
+   Zebra uses background on the tr; raise the highlight via !important + a fuller-opacity tint. */
+.zebra tbody tr.row-warn,
+.zebra tbody tr.row-warn:nth-child(even) {
+  background: color-mix(in oklch, var(--chart-2) 12%, transparent) !important;
+}
+.zebra tbody tr.row-warn:hover {
+  background: color-mix(in oklch, var(--chart-2) 20%, transparent) !important;
+}
 
 /* Card hover lift — subtle shadow + 1px translate */
 .card-hover {
@@ -201,6 +210,36 @@
   width: 4px;
   border-radius: 0 2px 2px 0;
   background: var(--sidebar-primary);
+}
+
+/* Compact table variant — tighter rows for high-density lists (apply on <table>) */
+.table-compact tbody td { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.table-compact thead th { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.table-compact { font-size: 13px; line-height: 1.35; }
+
+/* Inline-link utility for clickable text inside table cells (SO/invoice/batch nos.) */
+.link-inline {
+  color: var(--primary);
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+.link-inline:hover { text-decoration: underline; }
+.link-inline:focus-visible { text-decoration: underline; }
+
+/* Empty-state KPI card — recedes visually when the value is dead (—, 0, ₹0) */
+.kpi-empty {
+  opacity: 0.78;
+  border-top: 1px dashed color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+}
+.kpi-empty:hover {
+  opacity: 0.92;
+}
+
+/* Section label divider — thin colored top accent on grouped headings */
+.section-divider {
+  border-top: 2px solid color-mix(in oklch, var(--primary) 35%, transparent);
+  padding-top: 0.5rem;
 }
 
 /* Print: hide chrome, show only documents (invoices, pick lists, labels) */

@@ -38,11 +38,11 @@ export default function WarehousePage() {
           <div className="px-5 pt-4 pb-2 flex items-center gap-2"><LayoutGrid className="h-4 w-4" /><h2 className="text-sm font-semibold">Bin map</h2></div>
           <div className="overflow-x-auto scroll-thin max-h-96 overflow-y-auto">
             {bins?.length === 0 ? <Empty>No bins — put away unbinned stock</Empty> : (
-              <table className="w-full text-sm">
+              <table className="zebra w-full text-sm">
                 <thead className="sticky top-0 bg-card"><tr className="text-xs text-muted-foreground border-b">{["Bin", "Item", "Batch", "Qty", "Value"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${(i === 3 || i === 4) ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
                 <tbody>
                   {bins?.map((b) => (
-                    <tr key={b.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr key={b.id} className="border-b last:border-0">
                       <td className="px-5 py-2 font-mono text-xs">{b.code}</td>
                       <td className="px-5"><span className="font-mono text-xs">{b.item.code}</span><span className="text-xs text-muted-foreground block">{b.item.name}</span></td>
                       <td className="px-5 font-mono text-xs">{b.batchNo ?? "—"}</td>
@@ -59,11 +59,11 @@ export default function WarehousePage() {
           <div className="px-5 pt-4 pb-2"><h2 className="text-sm font-semibold">Awaiting put-away</h2></div>
           <div className="overflow-x-auto scroll-thin max-h-96 overflow-y-auto">
             {unbinned.length === 0 ? <Empty>All stock is binned</Empty> : (
-              <table className="w-full text-sm">
+              <table className="zebra w-full text-sm">
                 <thead className="sticky top-0 bg-card"><tr className="text-xs text-muted-foreground border-b">{["Item", "Wh", "Batch", "Qty"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>)}</tr></thead>
                 <tbody>
                   {unbinned.map((s, i) => (
-                    <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr key={i} className="border-b last:border-0">
                       <td className="px-5 py-2"><span className="font-mono text-xs">{itemMap.get(s.itemId)?.code}</span></td>
                       <td className="px-5 text-xs font-mono">{s.warehouseCode}</td>
                       <td className="px-5 font-mono text-xs">{s.batchNo ?? "—"}</td>

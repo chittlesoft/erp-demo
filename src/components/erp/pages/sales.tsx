@@ -11,7 +11,7 @@ import { useApi, useAction, lookup, inr2, qty } from "@/lib/erp/client";
 import type { ItemRow, Party, SalesOrder, SoLine, Invoice } from "@/lib/erp/shared";
 import { PageIntro, Empty, StatusBadge } from "../shared";
 import { ExportButton } from "../export-button";
-import { useNav } from "@/lib/erp/nav";
+import { InvoiceView } from "../invoice-view";
 
 const SO_COLS = ["SO no.", "Customer", "Cust. PO", "Delivery", "Value", "Dispatched", "Status", ""];
 const INV_COLS = ["Invoice", "Date", "Customer", "Taxable", "GST", "Total", "IRN", ""];
@@ -82,7 +82,7 @@ function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Part
         {sos.length === 0 ? (
           <Empty>No sales orders</Empty>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm zebra">
             <thead>
               <tr className="text-xs text-muted-foreground border-b">
                 {SO_COLS.map((h, i) => (
@@ -96,7 +96,7 @@ function SOList({ sos, items, customers }: { sos: (SalesOrder & { customer: Part
                 const dispatched = so.lines.reduce((s, l) => s + l.dispatchedQty * l.rate, 0);
                 const overdue = so.status !== "CLOSED" && so.deliveryDate < todayStr;
                 return (
-                  <tr key={so.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={so.id} className="border-b last:border-0">
                     <td className="px-5 py-2 font-mono text-xs">{so.soNo}</td>
                     <td className="px-5">{so.customer.name}</td>
                     <td className="px-5 text-xs font-mono">{so.customerPo}</td>
@@ -304,7 +304,7 @@ function DispatchDialog({ so, onClose }: { so: SalesOrder; onClose: () => void }
 }
 
 function InvoiceList({ invoices }: { invoices: (Invoice & { customer: Party; so: SalesOrder })[] }) {
-  const { go } = useNav();
+  const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
   const csvRows = useMemo(
     () =>
       invoices.map((inv) => ({
@@ -332,7 +332,7 @@ function InvoiceList({ invoices }: { invoices: (Invoice & { customer: Party; so:
         {invoices.length === 0 ? (
           <Empty>No invoices</Empty>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full text-sm zebra">
             <thead>
               <tr className="text-xs text-muted-foreground border-b">
                 {INV_COLS.map((h, i) => (
@@ -344,8 +344,17 @@ function InvoiceList({ invoices }: { invoices: (Invoice & { customer: Party; so:
               {invoices.map((inv) => {
                 const gst = inv.cgst + inv.sgst + inv.igst;
                 return (
-                  <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="px-5 py-2 font-mono text-xs">{inv.invNo}</td>
+                  <tr key={inv.id} className="border-b last:border-0">
+                    <td className="px-5 py-2 font-mono text-xs">
+                      <button
+                        type="button"
+                        className="link-inline"
+                        onClick={() => setViewInvoiceId(inv.id)}
+                        title={`View invoice ${inv.invNo}`}
+                      >
+                        {inv.invNo}
+                      </button>
+                    </td>
                     <td className="px-5 text-xs tabular-nums">{inv.date}</td>
                     <td className="px-5">{inv.customer.name}</td>
                     <td className="px-5 text-right tabular-nums">{inr2(inv.taxable)}</td>
@@ -353,7 +362,7 @@ function InvoiceList({ invoices }: { invoices: (Invoice & { customer: Party; so:
                     <td className="px-5 text-right tabular-nums font-medium">{inr2(inv.total)}</td>
                     <td className="px-5"><StatusBadge status={inv.irn ? "IRN_OK" : "IRN_PENDING"} /></td>
                     <td className="px-5 text-right">
-                      <Button size="sm" variant="ghost" onClick={() => go("sales", inv.id)}>View</Button>
+                      <Button size="sm" variant="ghost" onClick={() => setViewInvoiceId(inv.id)}>View</Button>
                     </td>
                   </tr>
                 );
@@ -362,6 +371,7 @@ function InvoiceList({ invoices }: { invoices: (Invoice & { customer: Party; so:
           </table>
         )}
       </div>
+      <InvoiceView invoiceId={viewInvoiceId} onClose={() => setViewInvoiceId(null)} />
     </div>
   );
 }

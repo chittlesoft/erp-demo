@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 pt-1">
+    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 pt-1 section-divider">
       {children}
     </div>
   );
@@ -36,7 +36,7 @@ export default function DashboardPage() {
   const chart = data.byLine.map((l) => ({ ...l, line: LINE_LABEL[l.line] ?? l.line }));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Live overview of Tau Power&apos;s manufacturing operations — inventory, orders, shop floor and supply chain.
@@ -46,7 +46,7 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <SectionLabel>Operations</SectionLabel>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi label="Inventory value" value={inr(data.stockValue)} sub={`${data.itemCount} items`} testid="text-kpi-stock-value" tone="emerald" />
@@ -57,7 +57,7 @@ export default function DashboardPage() {
       </section>
 
       {sum && (
-        <section className="space-y-2">
+        <section className="space-y-3">
           <SectionLabel>Sales &amp; supply chain</SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Kpi label="Open order book" value={inr(sum.orderBook)} sub={`${sum.openSOs} sales orders${sum.overdue ? ` · ${sum.overdue} overdue` : ""}`} testid="text-kpi-orderbook" tone="emerald" />
@@ -69,7 +69,7 @@ export default function DashboardPage() {
       )}
 
       {p3 && (
-        <section className="space-y-2">
+        <section className="space-y-3">
           <SectionLabel>Shop floor &amp; quality</SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Kpi label="Units on shop floor" value={String(p3.wip + p3.hold)} sub={p3.hold ? `${p3.hold} on hold for rework/scrap` : "None on hold"} testid="text-kpi-wip" tone="neutral" />

@@ -5,6 +5,9 @@ import { Inbox, TrendingDown, TrendingUp } from "lucide-react";
 /** Tone keys for KPI accents (no indigo/blue). */
 export type KpiTone = "emerald" | "amber" | "rose" | "sky" | "violet" | "neutral";
 
+/** Shared className for clickable in-table text (SO/invoice/batch nos.). Pairs with the `.link-inline` CSS utility. */
+export const LINK_INLINE = "link-inline";
+
 const TONE_CLASS: Record<KpiTone, string> = {
   emerald: "kpi-accent-emerald",
   amber: "kpi-accent-amber",
@@ -113,7 +116,7 @@ export function Kpi({
   const v = value?.trim() ?? "";
   const isDead = v === "" || v === "—" || v === "0" || v === "₹0" || v === "₹0.00";
   return (
-    <div className={`rounded-xl border bg-card p-4 shadow-xs card-hover ${tone ? TONE_CLASS[tone] : ""}`}>
+    <div className={`rounded-xl border bg-card p-4 shadow-xs card-hover ${tone ? TONE_CLASS[tone] : ""} ${isDead ? "kpi-empty" : ""}`}>
       <div className="text-xs text-muted-foreground font-medium">{label}</div>
       <div
         data-testid={testid}

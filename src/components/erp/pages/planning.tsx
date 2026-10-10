@@ -21,13 +21,13 @@ export default function PlanningPage() {
       <div className="rounded-xl border bg-card shadow-xs">
         <div className="overflow-x-auto scroll-thin">
           {isLoading ? <div className="p-4 space-y-2">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9" />)}</div> : (data ?? []).length === 0 ? <Empty>No planned orders — nothing to plan</Empty> : (
-            <table className="w-full text-sm">
+            <table className="zebra w-full text-sm">
               <thead><tr className="text-xs text-muted-foreground border-b">
                 {["Component", "Required", "Available", "Shortage"].map((h, i) => <th key={i} className={`font-medium px-5 py-2 ${i >= 1 ? "text-right" : "text-left"}`}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {(data ?? []).map((r) => (
-                  <tr key={r.itemId} className={`border-b last:border-0 hover:bg-muted/30 ${r.shortage > 0 ? "bg-red-50/40 dark:bg-red-950/20" : ""}`}>
+                  <tr key={r.itemId} className={`border-b last:border-0 ${r.shortage > 0 ? "row-warn" : ""}`}>
                     <td className="px-5 py-2"><span className="font-mono text-xs">{r.code}</span><span className="text-xs text-muted-foreground block">{r.name}</span></td>
                     <td className="px-5 text-right tabular-nums">{qty(r.required)} {r.uom}</td>
                     <td className="px-5 text-right tabular-nums">{qty(r.available)}</td>
