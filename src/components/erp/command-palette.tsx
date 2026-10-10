@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard, Boxes, Cpu, LayoutGrid, ShieldCheck, Network, Warehouse, Factory,
   CalendarClock, ScanSearch, Users, ShoppingCart, Receipt, BookOpen, BarChart3,
-  ArrowLeftRight, RefreshCw, Moon, Sun,
+  ArrowLeftRight, RefreshCw, Moon, Sun, History,
 } from "lucide-react";
 import {
   CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command";
 import { useNav, type View } from "@/lib/erp/nav";
 import { useToast } from "@/hooks/use-toast";
+import { openActivityDrawer } from "./activity-feed";
 
 // Local copy of the sidebar nav list (icons + labels) so the palette stays
 // self-contained without needing layout.tsx to export its private NAV array.
@@ -96,6 +97,11 @@ export function CommandPalette() {
     setOpen(false);
   };
 
+  const viewActivity = () => {
+    setOpen(false);
+    openActivityDrawer();
+  };
+
   return (
     <CommandDialog open={open} onOpenChange={setOpen} className="max-w-xl">
       <CommandInput placeholder="Type a command or search…" />
@@ -121,6 +127,13 @@ export function CommandPalette() {
           >
             <RefreshCw className="h-4 w-4 text-muted-foreground" />
             <span>Reload demo data</span>
+          </CommandItem>
+          <CommandItem
+            value="activity log timeline history audit events"
+            onSelect={viewActivity}
+          >
+            <History className="h-4 w-4 text-muted-foreground" />
+            <span>View activity log</span>
           </CommandItem>
           <CommandItem value="toggle theme dark light mode" onSelect={toggleTheme}>
             {theme === "dark" ? (

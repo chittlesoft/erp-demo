@@ -12,6 +12,7 @@ import type { Settings } from "@/lib/erp/shared";
 import { useNav, type View } from "@/lib/erp/nav";
 import { CommandPalette, CommandPaletteTrigger } from "./command-palette";
 import { NotificationsBell } from "./notifications";
+import { ActivityFeed, ActivityButton } from "./activity-feed";
 const NAV: { href: View; label: string; icon: typeof LayoutDashboard; group: string }[] = [
   { href: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "" },
   { href: "analytics", label: "Management Dashboards", icon: BarChart3, group: "" },
@@ -107,6 +108,7 @@ export function Layout({ children }: { children: ReactNode }) {
               )}
               <CommandPaletteTrigger />
               <span className="hidden sm:inline text-xs text-muted-foreground">Prototype · demo transactions</span>
+              <ActivityButton />
               <NotificationsBell />
               <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
                 {mounted && theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -120,6 +122,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </footer>
       </div>
       <CommandPalette />
+      <ActivityFeed />
     </div>
   );
 }

@@ -356,3 +356,75 @@ export async function listReports(): Promise<PdiReportDetail[]> {
   for (const r of rows) out.push(await getReport(r.id));
   return out;
 }
+
+// ---------- dispatch gate ----------
+// Mirrors the original Express `pdi.assert` + `pdi.link` + `pdi.status`.
+// The gate is wired into `/api/sales/invoices/create` so that a dispatch is
+// blocked until every line whose part has a PDI plan is covered by accepted
+// (un-invoiced) PDI qty; once invoiced, the reports are linked to the invoice
+// via `PdiReport.invoiceNo` (our schema has no `invoiceId` column, so we store
+// the invoice number string and look it up by `invNo` in `getReport`).
+
+/** Per-line PDI coverage status for an SO (required = has a plan; covered = open accepted qty). */
+export async function status(soId: number): Promise<{ soLineId: number; required: boolean; covered: number }[]> {
+  const so = await db.salesOrder.findUnique({ where: { id: soId }, include: { lines: true } });
+  if (!so) return [];
+  const out: { soLineId: number; required: boolean; covered: number }[] = [];
+  for (const l of so.lines) {
+    const plan = await getPlan(l.itemId);
+    const covered = await openQty(l.id);
+    out.push({ soLineId: l.id, required: !!plan, covered });
+  }
+  return out;
+}
+
+/**
+ * Dispatch gate — for every line whose part has a PDI plan, the accepted
+ * un-invoiced PDI qty must cover the dispatch qty, else throw ErpError.
+ * Lines without a plan are skipped (parts not subject to PDI).
+ */
+export async function assert(soId: number, lines: { soLineId: number; qty: number }[]): Promise<void> {
+  const so = await db.salesOrder.findUnique({ where: { id: soId }, include: { lines: { include: { item: true } } } });
+  if (!so) return;
+  const short: string[] = [];
+  for (const l of lines.filter((x) => x.qty > 0)) {
+    const sl = so.lines.find((x) => x.id === l.soLineId);
+    if (!sl) continue;
+    const plan = await getPlan(sl.itemId);
+    if (!plan) continue;
+    const cov = await openQty(sl.id);
+    if (cov + 1e-9 < l.qty) short.push(`${sl.item.code} (PDI covers ${cov} of ${l.qty})`);
+  }
+  if (short.length) {
+    throw new ErpError(
+      `Dispatch blocked: pre-dispatch inspection pending for ${short.join(", ")}. Complete PDI in Quality → PDI first.`,
+    );
+  }
+}
+
+/**
+ * After an invoice is raised, link accepted un-invoiced PDI reports (up to the
+ * dispatched qty) to the new invoice by setting `PdiReport.invoiceNo = invNo`.
+ * The `invoiceId` param is accepted for API symmetry with the original but is
+ * unused (our schema stores `invoiceNo: String?`, not `invoiceId: Int?`).
+ */
+export async function link(
+  soId: number,
+  lines: { soLineId: number; qty: number }[],
+  invoiceId: number,
+  invNo: string,
+): Promise<void> {
+  void soId; // soLineId in the report payload is the actual filter
+  void invoiceId; // schema uses invoiceNo, not invoiceId
+  const needByLine = new Map<number, number>();
+  for (const l of lines) if (l.qty > 0) needByLine.set(l.soLineId, l.qty);
+  if (!needByLine.size) return;
+  const rows = await db.pdiReport.findMany({ where: { result: "ACCEPT", invoiceNo: null }, orderBy: { id: "asc" } });
+  for (const r of rows) {
+    const p = safeReportPayload(parseJson<Partial<ReportPayload>>(r.readings, {}));
+    const need = needByLine.get(p.soLineId);
+    if (need == null || need <= 1e-9) continue;
+    await db.pdiReport.update({ where: { id: r.id }, data: { invoiceNo: invNo } });
+    needByLine.set(p.soLineId, need - r.qty);
+  }
+}

@@ -492,3 +492,24 @@ model GspLog {
   response  String
   ts        String
 }
+
+// ============================ Phase 4 — Activity log / timeline ============================
+
+// Global audit-style timeline: append-only event log of business actions across
+// modules (items, BOM, inventory, production, purchase, sales, quality, PDI,
+// shopfloor, settings, seed). Populated lazily by seedActivity() on first read
+// when the table is empty, and by explicit logActivity() calls from any route.
+model ActivityLog {
+  id        Int    @id @default(autoincrement())
+  ts        String                       // ISO timestamp
+  module    String                       // "items" | "bom" | "inventory" | "production" | "purchase" | "sales" | "quality" | "pdi" | "shopfloor" | "settings" | "seed"
+  action    String                       // "create" | "update" | "delete" | "complete" | "dispatch" | "scan" | "inspect" | "reseed" ...
+  refType   String?                      // "item" | "order" | "invoice" | "po" | "grn" | "so" | "pdi" | "ncr" ...
+  refId     String?                      // the entity's code/number (e.g. "TTT000002", "INV/26-27/0001")
+  refIdInt  Int?                         // numeric id if applicable
+  title     String                       // human-readable summary, e.g. "Invoice INV/26-27/0001 created for Orient Engineering"
+  detail    String?                      // optional longer detail
+  user      String   @default("system")  // who did it (prototype = "system" or "operator")
+
+  @@map("activity_logs")
+}

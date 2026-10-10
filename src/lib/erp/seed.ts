@@ -8,6 +8,8 @@
 import { db } from "@/lib/db";
 import { PREFIX, fyNo, roundQty, simulatedEol, today } from "./shared";
 import { rolledCost } from "./service";
+import type { PdiChar } from "./pdi-shared";
+import { ensureRoutings } from "./phase3";
 
 type SeedItem = [code: string, name: string, type: string, line: string | null, hsn: string, uom: string, tracking: string, reorder: number, cost: number, cpn: string | null];
 type BomSeed = [parent: string, comp: string, qty: number, scrap: number];
@@ -261,6 +263,127 @@ export async function ensureSeeded(force = false) {
     for (const sno of l.serials) await db.serial.update({ where: { serialNo: sno }, data: { invoiceId: inv.id, status: "DISPATCHED" } });
   }
   for (const sl of [sol1, sol2]) await db.soLine.update({ where: { id: sl.id }, data: { dispatchedQty: sl.qty } });
+
+  // ---------- PDI plans + reports + a second OPEN sales order + WIP units (Task 7-a) ----------
+  // Mirror the original Express PDI seed (`extracted/erp-project/app/server/pdi.ts`
+  // lines 147-164): TTT000002 + TTT000004 get plans with the exact characteristics
+  // from the Tau Power PDI report format (TPE/IMS/FR/78 Rev 01); a second OPEN SO
+  // (customerPo "OES/PO/26-27/0142") carries accepted PDI reports that haven't yet
+  // been linked to an invoice — so the Quality → PDI "Awaiting inspection" list,
+  // the PDI reports list, and the dispatch gate (wired in /api/sales/invoices/create)
+  // all have realistic data to render + exercise.
+
+  // PDI characteristic builders (mirror original `num` + `attr` helpers).
+  const numChar = (sr: number, description: string, nominal: number, tol: number, method: string, unit = "mm"): PdiChar => ({ sr, description, kind: "num", nominal, tolMinus: tol, tolPlus: tol, spec: "", method, unit });
+  const attrChar = (sr: number, description: string, spec: string, method: string): PdiChar => ({ sr, description, kind: "attr", nominal: null, tolMinus: null, tolPlus: null, spec, method, unit: "" });
+
+  // PDI plans for TTT000002 + TTT000004 — characteristics exactly as on the Tau
+  // Power PDI reports (probe/harness measured, mounting fitment attribute).
+  const plan2Chars: PdiChar[] = [
+    numChar(1, "Probe Length", 70, 1, "Vernier Caliper"),
+    numChar(2, "Harness Length", 400, 10, "Measuring Tape"),
+    attrChar(3, "Mounting Fitment", "M14x1.5-6g", "Thread Gauge"),
+  ];
+  const plan4Chars: PdiChar[] = [
+    numChar(1, "Probe Length", 50, 1, "Vernier Caliper"),
+    numChar(2, "Harness Length", 300, 10, "Measuring Tape"),
+    attrChar(3, "Mounting Fitment", "M12x1.25-6h", "Thread Gauge"),
+  ];
+  await db.pdiPlan.create({
+    data: {
+      itemId: I["TTT000002"],
+      characteristics: JSON.stringify({ drgRev: "00", drgDate: "2026-10-06", refStandard: "-", chars: plan2Chars }),
+    },
+  });
+  await db.pdiPlan.create({
+    data: {
+      itemId: I["TTT000004"],
+      characteristics: JSON.stringify({ drgRev: "00", drgDate: "2026-10-06", refStandard: "-", chars: plan4Chars }),
+    },
+  });
+
+  // Second OPEN sales order — Orient customer, customerPo matching the original
+  // PDI seed reference. dispatchedQty stays 0 so PDI pending() returns these lines.
+  const so2 = await db.salesOrder.create({
+    data: {
+      soNo: fyNo("SO", 5, new Date("2026-10-09")),
+      customerId: orient.id,
+      customerPo: "OES/PO/26-27/0142",
+      date: "2026-10-09",
+      deliveryDate: "2026-10-15",
+      status: "OPEN",
+    },
+  });
+  const sol2a = await db.soLine.create({ data: { soId: so2.id, itemId: I["TTT000002"], qty: 11, rate: 1050, dispatchedQty: 0 } });
+  const sol2b = await db.soLine.create({ data: { soId: so2.id, itemId: I["TTT000004"], qty: 7, rate: 1050, dispatchedQty: 0 } });
+
+  // Accepted PDI reports for the second SO's lines — readings exactly as on the
+  // attached Tau Power PDI reports; invoiceNo left null so the dispatch gate
+  // sees them as available coverage (openQty) for a new invoice.
+  const pdiRep1Payload = {
+    pdiNo: "PDI/2610/0001",
+    soId: so2.id,
+    soLineId: sol2a.id,
+    customerId: orient.id,
+    drgRev: "00",
+    drgDate: "2026-10-06",
+    refStandard: "-",
+    mtr: false,
+    chars: plan2Chars,
+    readings: [
+      { sr: 1, values: ["70.02", "69.99", "70.03", "70.02", "70.01"], ok: true },
+      { sr: 2, values: ["401", "402", "400", "401", "400"], ok: true },
+      { sr: 3, values: ["OK", "OK", "OK", "OK", "OK"], ok: true },
+    ],
+    inspector: "PDI Inspector",
+    note: "",
+    invoiceId: null,
+    invoiceDate: null,
+  };
+  await db.pdiReport.create({
+    data: { invoiceNo: null, itemId: I["TTT000002"], qty: 11, sampleNo: 5, date: "2026-10-09", readings: JSON.stringify(pdiRep1Payload), result: "ACCEPT" },
+  });
+  const pdiRep2Payload = {
+    pdiNo: "PDI/2610/0002",
+    soId: so2.id,
+    soLineId: sol2b.id,
+    customerId: orient.id,
+    drgRev: "00",
+    drgDate: "2026-10-06",
+    refStandard: "-",
+    mtr: false,
+    chars: plan4Chars,
+    readings: [
+      { sr: 1, values: ["50.02", "49.99", "50.01", "50.01", "50.01"], ok: true },
+      { sr: 2, values: ["302", "300", "300", "301", "300"], ok: true },
+      { sr: 3, values: ["OK", "OK", "OK", "OK", "OK"], ok: true },
+    ],
+    inspector: "PDI Inspector",
+    note: "",
+    invoiceId: null,
+    invoiceDate: null,
+  };
+  await db.pdiReport.create({
+    data: { invoiceNo: null, itemId: I["TTT000004"], qty: 7, sampleNo: 5, date: "2026-10-09", readings: JSON.stringify(pdiRep2Payload), result: "ACCEPT" },
+  });
+
+  // WIP units on the IN_PROGRESS order PO-26-0100 (FG-EGTS-TC) so the shopfloor
+  // board (`/api/phase3/board`) shows stations with active WIP. ensureRoutings()
+  // creates the default EGTS routing ops (seq 10..50) so the WipUnit.seq values
+  // resolve to a real op (Probe assembly / Weld / Cal).
+  await ensureRoutings();
+  const egtsOrder = await db.productionOrder.findFirst({ where: { orderNo: "PO-26-0100" } });
+  if (egtsOrder) {
+    const wipSeqs = [10, 10, 20, 30]; // 2 queued at ASM-1, 1 at WELD, 1 at CAL
+    let wipSeq = 201; // existing serials go up to EGT-2610-00200; start above
+    for (const seq of wipSeqs) {
+      const sno = `EGT-2610-${String(wipSeq).padStart(5, "0")}`;
+      await db.wipUnit.create({
+        data: { serialNo: sno, itemId: I["FG-EGTS-TC"], productionOrderId: egtsOrder.id, seq, status: "QUEUED", reworkCount: 0, results: "{}" },
+      });
+      wipSeq++;
+    }
+  }
 
   _seeded = true;
 }
