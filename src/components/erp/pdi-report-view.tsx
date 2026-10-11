@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import { Printer, FileText } from "lucide-react";
 import {
   Dialog,
@@ -34,6 +35,14 @@ export function PdiReportView({
   );
 
   const accepted = r?.result === "ACCEPT";
+  // Print-time stamp computed once per render of the loaded report; stored
+  // in a memo so it doesn't shift on every parent re-render (it would
+  // otherwise update on each HMR tick / parent state change). Shown only in
+  // the print footer.
+  const printedAt = useMemo(
+    () => new Date().toLocaleString("en-IN"),
+    [r?.id],
+  );
 
   return (
     <Dialog
@@ -75,7 +84,7 @@ export function PdiReportView({
         ) : (
           <div
             className="
-              print-area max-h-[75vh] overflow-y-auto scroll-thin pr-1
+              print-area pdi-landscape max-h-[75vh] overflow-y-auto scroll-thin pr-1
               print:max-h-none print:overflow-visible print:pr-0
             "
           >
@@ -261,13 +270,19 @@ export function PdiReportView({
 
               <div className="text-right text-[8.5pt] font-semibold mt-2">{PDI_DOC}</div>
 
-              {/* ---- Print-only footer: document number + print timestamp + page placeholder ---- */}
-              <div className="print-only mt-4 pt-2 border-t border-black/40 text-[9pt] text-black flex items-center justify-between">
+              {/*
+                Running print footer — fixed to the bottom of every printed
+                A4 page (per the .print-footer rule in globals.css). Carries
+                the document number, print timestamp, inspector name, and a
+                CSS-counter "Page X of Y" via the .print-footer-page element.
+                Hidden on screen (.print-only).
+              */}
+              <div className="print-only print-footer flex items-center justify-between gap-4">
                 <span className="font-mono">{PDI_DOC}, Rev.01</span>
                 <span className="font-mono">
-                  Printed: {new Date().toLocaleString("en-IN")}
+                  Inspector: {r.inspector} · Printed: {printedAt}
                 </span>
-                <span className="font-mono">Page ___ of ___</span>
+                <span className="print-footer-page font-mono" aria-hidden />
               </div>
             </div>
           </div>

@@ -25,6 +25,20 @@ type TrendSummary = {
 };
 
 /**
+ * The base `Summary` type (in `@/lib/erp/shared`, owned by a different agent)
+ * only declares the original 7 KPI fields. The `/api/summary` route returns a
+ * superset that also includes `salesLastMonth` + `salesMtdDeltaPct` (added in
+ * round 14-a). We declare those two extras here as a locally-augmented type so
+ * the dashboard can read them without touching `shared.ts` — TypeScript lets
+ * `useApi<SummaryWithDelta>` read the wider shape, and the missing fields are
+ * simply `undefined` if the route ever returns the bare shape.
+ */
+type SummaryWithDelta = Summary & {
+  salesLastMonth?: number;
+  salesMtdDeltaPct?: number | null;
+};
+
+/**
  * Wraps a `Kpi` card with an optional `trend` indicator pinned to the
  * top-right corner (same row as the label). Used for today-vs-yesterday deltas
  * on the "Sensors produced (good)" + "First-pass yield" cards. When `trend` is
@@ -52,7 +66,7 @@ export default function DashboardPage() {
   const { data, isLoading } = useApi<Dashboard>("/api/dashboard");
   const { data: orders } = useApi<ProductionOrder[]>("/api/orders");
   const p3 = useApi<Phase3Summary>("/api/phase3/summary").data;
-  const sum = useApi<Summary>("/api/summary").data;
+  const sum = useApi<SummaryWithDelta>("/api/summary").data;
   // Today vs yesterday deltas for the "Sensors produced (good)" + "First-pass
   // yield" KPI indicators. `?summary=true` returns the trend array PLUS the
   // delta fields; the dashboard's chart keeps using the bare array endpoint.
@@ -118,7 +132,15 @@ export default function DashboardPage() {
           <SectionLabel>Sales &amp; supply chain</SectionLabel>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Kpi label="Open order book" value={inr(sum.orderBook)} sub={`${sum.openSOs} sales orders${sum.overdue ? ` · ${sum.overdue} overdue` : ""}`} testid="text-kpi-orderbook" tone="emerald" />
-            <Kpi label="Sales this month (taxable)" value={inr(sum.salesMtd)} testid="text-kpi-sales" tone="emerald" />
+            <KpiWithTrend
+              trend={
+                sum.salesMtdDeltaPct !== null && sum.salesMtdDeltaPct !== undefined
+                  ? <StatTrend delta={sum.salesMtdDeltaPct} suffix="%" />
+                  : undefined
+              }
+            >
+              <Kpi label="Sales this month (taxable)" value={inr(sum.salesMtd)} sub="vs last month" testid="text-kpi-sales" tone="emerald" />
+            </KpiWithTrend>
             <Kpi label="Invoices awaiting IRN" value={String(sum.irnPending)} sub="Upload e-invoice JSON to IRP" testid="text-kpi-irn" tone="sky" />
             <Kpi label="Purchasing" value={`${sum.openPOs} open POs`} sub={`${sum.openIndents} indents to convert`} testid="text-kpi-purchase" tone="sky" />
           </div>

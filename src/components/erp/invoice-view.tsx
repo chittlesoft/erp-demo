@@ -100,6 +100,14 @@ export function InvoiceView({
   );
   const { data: settings } = useApi<CompanySettings>("/api/settings");
 
+  // Print-time stamp computed once per loaded invoice; shown only in the
+  // print footer. Keyed on invoice?.id so it doesn't shift on every parent
+  // re-render / HMR tick.
+  const printedAt = useMemo(
+    () => new Date().toLocaleString("en-IN"),
+    [invoice?.id],
+  );
+
   const lines = useMemo<InvoiceLine[]>(
     () => (invoice ? safeParseLines(invoice.lines) : []),
     [invoice],
@@ -363,6 +371,22 @@ export function InvoiceView({
               <div className="text-center">
                 <div className="border-t w-40 pt-1 mt-8">Authorised signatory</div>
               </div>
+            </div>
+
+            {/*
+              Running print footer — fixed to the bottom of every printed A4
+              page (per the .print-footer rule in globals.css). Carries the
+              document title, invoice no, print timestamp and a CSS-counter
+              "Page X of Y" via the .print-footer-page element. Hidden on
+              screen (.print-only). Mirrors the PDI report's print footer so
+              the two printable documents share a consistent metadata strip.
+            */}
+            <div className="print-only print-footer flex items-center justify-between gap-4">
+              <span className="font-mono">
+                Tax Invoice{invoice ? ` · ${invoice.invNo}` : ""}
+              </span>
+              <span className="font-mono">Printed: {printedAt}</span>
+              <span className="print-footer-page font-mono" aria-hidden />
             </div>
           </div>
         )}

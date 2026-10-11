@@ -118,6 +118,49 @@ function relativeTime(ts: string, now: number): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Quick-range presets — set the from/to dates in one click. The currently-active
+// preset is derived from the live from/to state so manual date edits can clear
+// the active chip (no preset matches → none highlighted) without any extra state.
+// `today()` mirrors the `@/lib/erp/shared` `today` helper but inlined here so
+// the chip module stays dependency-light (the shared `today` already re-derives
+// on every render — calling it from a click handler is fine).
+// ─────────────────────────────────────────────────────────────────────────────
+
+type QuickRange = "today" | "7d" | "30d" | "all";
+
+const QUICK_RANGES: { value: QuickRange; label: string }[] = [
+  { value: "today", label: "Today" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "all", label: "All time" },
+];
+
+function isoToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Returns the QuickRange preset that matches the current `from`/`to` state, or
+ * `null` if no preset matches (e.g. the user manually picked a custom range).
+ * Empty `from`/`to` is treated as "All time" since clearing the filter == no
+ * date restriction. Pure + deterministic so it can be called inline per render.
+ */
+function activeQuickRange(from: string, to: string): QuickRange | null {
+  if (from === "" && to === "") return "all";
+  const t = isoToday();
+  if (from === t && to === t) return "today";
+  if (from === isoDaysAgo(7) && to === t) return "7d";
+  if (from === isoDaysAgo(30) && to === t) return "30d";
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Build the activity API URL from the current filter state.
 // `exportLimit` lets the CSV export fetch a larger set than the drawer view.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,6 +214,28 @@ export function ActivityFeed() {
   const rows = useMemo(() => data ?? [], [data]);
 
   const hasDateFilter = from !== "" || to !== "";
+
+  // Derived from the live from/to state — no separate state variable needed,
+  // so manual date edits and chip clicks both stay in sync with the highlight.
+  const activeRange = activeQuickRange(from, to);
+
+  function applyQuickRange(r: QuickRange) {
+    const t = isoToday();
+    if (r === "today") {
+      setFrom(t);
+      setTo(t);
+    } else if (r === "7d") {
+      setFrom(isoDaysAgo(7));
+      setTo(t);
+    } else if (r === "30d") {
+      setFrom(isoDaysAgo(30));
+      setTo(t);
+    } else {
+      // "all" → clear the date filter (matches the existing Clear button).
+      setFrom("");
+      setTo("");
+    }
+  }
 
   function clearDates() {
     setFrom("");
@@ -261,6 +326,32 @@ export function ActivityFeed() {
 
         {/* Date-range filter */}
         <div className="px-4 py-2 border-b bg-muted/10">
+          {/* Quick-range presets — one click sets from/to to a sensible window.
+              `activeRange` is derived live, so it stays in sync with manual
+              date edits (and vice versa: a chip click updates the inputs). */}
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {QUICK_RANGES.map((r) => {
+              const active = activeRange === r.value;
+              return (
+                <Button
+                  key={r.value}
+                  type="button"
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-2.5 text-[11px] font-medium"
+                  onClick={() => applyQuickRange(r.value)}
+                  aria-pressed={active}
+                  title={
+                    r.value === "all"
+                      ? "Clear the date filter (show all activity)"
+                      : `Filter to ${r.label.toLowerCase()}`
+                  }
+                >
+                  {r.label}
+                </Button>
+              );
+            })}
+          </div>
           <div className="flex items-center gap-1.5">
             <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="text-[11px] text-muted-foreground shrink-0">Date range</span>

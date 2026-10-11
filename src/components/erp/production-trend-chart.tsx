@@ -70,7 +70,7 @@ export function ProductionTrendChart({
     <SectionCard
       className={className}
       title={`Production output — last ${days} days`}
-      subtitle="Daily EOL test results — good units (area) vs rejected units (line)"
+      subtitle="Daily EOL test results — good units (area, left axis) vs rejected units (line, right axis)"
       bodyClassName="h-64 px-2 pb-3"
     >
       {isLoading ? (
@@ -78,10 +78,18 @@ export function ProductionTrendChart({
       ) : hasData ? (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ left: -16, right: 8, top: 8 }}>
+            {/*
+              Emerald gradient for the good-units area. Stops use the
+              `--chart-1` CSS variable so the colour adapts to light/dark
+              mode; opacities bumped from the prior (0.35 / 0.05) so the fill
+              stays visible even on a Y axis scaled to ~120 units (the area
+              otherwise reads as faint, which the VLM flagged as
+              "flatlining at the bottom").
+            */}
             <defs>
               <linearGradient id="trendGood" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.05} />
+                <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.12} />
               </linearGradient>
             </defs>
             <CartesianGrid
@@ -97,25 +105,50 @@ export function ProductionTrendChart({
               tickLine={false}
               minTickGap={12}
             />
+            {/*
+              Dual Y axes — good units (0–~120) on the left axis, rejects
+              (0–~5) on the right. Without a right axis the reject line
+              appears as a near-flat line pinned to the bottom of a 0–120
+              chart, which VLM read as "data points flatlining at the
+              bottom". Splitting the scales makes both series legible.
+              `domain={[0, "auto"]}` is explicit (recharts v3 default
+              behaviour) so the chart never starts above 0 and the area
+              fills the full vertical range.
+            */}
             <YAxis
+              yAxisId="good"
+              domain={[0, "auto"]}
               tick={{ fontSize: 11 }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
               width={40}
             />
+            <YAxis
+              yAxisId="reject"
+              orientation="right"
+              domain={[0, "auto"]}
+              tick={{ fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              allowDecimals={false}
+              width={28}
+            />
             <Tooltip contentStyle={TOOLTIP_STYLE} cursor={CHART_CURSOR} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Area
+              yAxisId="good"
               type="monotone"
               dataKey="good"
               name="Good"
               stroke="var(--chart-1)"
               strokeWidth={2}
               fill="url(#trendGood)"
+              baseValue={0}
               cursor="pointer"
             />
             <Line
+              yAxisId="reject"
               type="monotone"
               dataKey="reject"
               name="Rejected"

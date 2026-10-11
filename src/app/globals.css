@@ -267,6 +267,16 @@
 /* Print-only elements: visible only when printing (page footers, "Page X of Y",
    print timestamp, document numbers). Hidden on screen, shown in print. */
 .print-only { display: none; }
+/* Print-only running header + footer blocks — sit above/below the printable
+   document. .print-header is a normal-flow block (renders once, at the top of
+   the printed document). .print-footer uses position: fixed so it appears at
+   the bottom of EVERY printed page (Chrome/Firefox/Edge/Safari all support
+   fixed positioning in print as a "running footer"). Use the
+   .print-footer-page element for the "Page X of Y" line — its ::before
+   content is filled in by the CSS counters counter(page)/counter(pages). */
+.print-header,
+.print-footer { display: none; }
+.print-footer-page { display: inline; }
 
 /* Print: hide chrome, show only documents (invoices, pick lists, labels, PDI reports).
    The sidebar/header/footer already carry .no-print. The .print-area wrapper
@@ -287,6 +297,17 @@
   body { background: #fff !important; }
   /* A4 margins — 14mm top/bottom for header/footer breathing room, 12mm sides. */
   @page { margin: 14mm 12mm; }
+  /* Named page for PDI reports — A4 landscape with tighter 10mm margins so
+     the wide characteristics + readings table (7 fixed cols + N sample cols)
+     fits one page wide and flows vertically across pages. Activated by adding
+     the .pdi-landscape class to the print-area wrapper (or any ancestor of
+     the printable content); has no effect on screen. */
+  @page pdi-landscape {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  .pdi-landscape { page: pdi-landscape; }
+
   /* Hide all dialogs except the printing one (the document wrapper sits inside
      .print-area so it stays visible; the overlay + other dialogs get hidden). */
   [data-slot="dialog-overlay"] { display: none !important; }
@@ -306,6 +327,41 @@
     max-width: none !important;
     min-width: 0 !important;
     box-shadow: none !important;
+  }
+
+  /* Running print footer — fixed to the bottom of every printed page. Black
+     text on transparent background (the page itself is white), thin top rule
+     for visual separation from the document body. Padding ensures the footer
+     text doesn't collide with the page bottom margin. */
+  .print-footer {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 2mm 0 1mm;
+    border-top: 1px solid #000;
+    background: #fff;
+    color: #000;
+    font-size: 8pt;
+    line-height: 1.3;
+    z-index: 10;
+  }
+  /* CSS-counter "Page X of Y" — the browser maintains counter(page) (current
+     page, 1-based) and counter(pages) (total page count) during a print job,
+     so this ::before content is filled in automatically without JS. */
+  .print-footer-page::before {
+    content: "Page " counter(page) " of " counter(pages);
+  }
+  /* Running print header — sits at the top of the first printed page in normal
+     flow (not fixed; we only have one header per document, not per page). */
+  .print-header {
+    display: block;
+    margin-bottom: 4mm;
+    padding-bottom: 2mm;
+    border-bottom: 1px solid #000;
+    color: #000;
+    font-size: 8.5pt;
   }
 }
 
@@ -353,4 +409,21 @@
   stroke: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
   stroke-width: 1;
   stroke-dasharray: 2 2;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/* Dashboard section gap — extra vertical breathing room between dashboard
+   section groups (e.g. between the "Shop floor & quality" KPI row and the
+   charts row immediately below it). Applied to a wrapping <section>/<div>;
+   composes safely with Tailwind's space-y-* on the parent (the gap adds
+   margin-top, space-y-* sets the same on siblings — no conflict because the
+   utility only fires when explicitly applied). */
+/* ────────────────────────────────────────────────────────────────────────── */
+.dashboard-section-gap {
+  margin-top: 1.75rem;
+}
+@media (min-width: 1024px) {
+  .dashboard-section-gap {
+    margin-top: 2rem;
+  }
 }
