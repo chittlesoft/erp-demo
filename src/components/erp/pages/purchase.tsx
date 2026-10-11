@@ -120,7 +120,7 @@ function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos
   const create = useAction("POST", "/api/purchase/grns/create", "GRN created — goods in QC quarantine");
   const po = pos.find((p) => p.id === Number(poId));
   const onPo = (v: string) => { setPoId(v); const p = pos.find((x) => x.id === Number(v)); setLines(p ? p.lines.map((l) => ({ poLineId: l.id, qty: String(Math.max(0, l.qty - l.receivedQty)), batchNo: "" })) : []); };
-  const submit = () => create.mutate({ poId: Number(poId), vendorInvoiceNo, lines: lines.filter((l) => Number(l.qty) > 0).map((l) => ({ poLineId: l.poLineId, qty: Number(l.qty), batchNo: l.batchNo || null })) } as never, { onSuccess: () => onOpenChange(false) });
+  const submit = () => create.mutate({ poId: Number(poId), vendorInvoiceNo, lines: lines.filter((l) => Number(l.qty) > 0).map((l) => ({ poLineId: l.poLineId, qty: Number(l.qty), batchNo: l.batchNo || null })) } as never, { onSuccess: () => setOpen(false) });
   return (
     <div className="rounded-xl border bg-card shadow-xs">
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Goods receipt notes</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><PackageCheck className="h-3.5 w-3.5 mr-1" />New GRN</Button>)}</div></div>
@@ -170,7 +170,7 @@ function GrnList({ grns, pos }: { grns: (Grn & { po: { vendor: Party } })[]; pos
               </div>
             )}
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={submit} disabled={!poId || !vendorInvoiceNo || create.isPending}>Receive &amp; create GRN</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={submit} disabled={!poId || !vendorInvoiceNo || create.isPending}>Receive &amp; create GRN</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -186,7 +186,7 @@ function IndentList({ indents }: { indents: (Indent & { item: ItemRow })[] }) {
   const [open, setOpen] = useState(false);
   const { data: items } = useApi<ItemRow[]>("/api/items");
   const create = useAction("POST", "/api/purchase/indents", "Indent raised");
-  const submit = () => create.mutate({ itemId: Number(itemId), qty: Number(qtyVal), requiredBy } as never, { onSuccess: () => onOpenChange(false) });
+  const submit = () => create.mutate({ itemId: Number(itemId), qty: Number(qtyVal), requiredBy } as never, { onSuccess: () => setOpen(false) });
   return (
     <div className="rounded-xl border bg-card shadow-xs">
       <div className="px-5 pt-4 pb-2 flex items-center"><h2 className="text-sm font-semibold">Purchase indents</h2><div className="ml-auto">{canMutate && (<Button size="sm" onClick={() => setOpen(true)}><FileText className="h-3.5 w-3.5 mr-1" />New indent</Button>)}</div></div>
@@ -215,7 +215,7 @@ function IndentList({ indents }: { indents: (Indent & { item: ItemRow })[] }) {
             <div><Label className="text-xs">Item</Label><Select value={itemId} onValueChange={setItemId}><SelectTrigger className="mt-1"><SelectValue placeholder="Select item" /></SelectTrigger><SelectContent className="max-h-72">{(items ?? []).map((it) => <SelectItem key={it.id} value={String(it.id)}>{it.code} — {it.name}</SelectItem>)}</SelectContent></Select></div>
             <div className="grid grid-cols-2 gap-3"><div><Label className="text-xs">Qty</Label><Input type="number" className="mt-1" value={qtyVal} onChange={(e) => setQty(e.target.value)} /></div><div><Label className="text-xs">Required by</Label><Input type="date" className="mt-1" value={requiredBy} onChange={(e) => setRequiredBy(e.target.value)} /></div></div>
           </div>
-          <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={submit} disabled={!itemId || !qtyVal || create.isPending}>Raise indent</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={submit} disabled={!itemId || !qtyVal || create.isPending}>Raise indent</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1409,3 +1409,33 @@ Task: Cron-triggered review — assess status, QA via agent-browser, add activit
   2. Party-scoped data access (customer sees only their SOs/invoices) — larger authz scope.
   3. Dashboard spacing polish: apply the `.dashboard-section-gap` utility to dashboard sections (orchestrator/future round — the class is defined but not yet applied to dashboard.tsx).
   4. Print preview verification: use agent-browser's `print` or PDF export to actually verify the PDI/invoice print footer renders with page numbers (currently verified structurally, not via a real print).
+
+---
+Task ID: 15
+Agent: orchestrator (main)
+Task: Fix runtime ReferenceError: onOpenChange is not defined (user-reported bug in purchase.tsx IndentList).
+
+## Current project status / assessment
+- User reported a runtime `ReferenceError: onOpenChange is not defined` at `src/components/erp/pages/purchase.tsx:218` (IndentList Cancel button click).
+- Root cause: the `IndentList` component (line 180) declares `const [open, setOpen] = useState(false)` (line 186) but references `onOpenChange(false)` on line 189 (submit onSuccess) + line 218 (Cancel onClick) — `onOpenChange` doesn't exist in that component's scope (it's `setOpen`). This is a copy-paste artifact from the `PODialog`/`GrnList` pattern where `onOpenChange` IS a prop.
+- A proactive scan found the SAME bug in `GrnList` (line 113): uses `setOpen` state but references `onOpenChange` on lines 123 (submit onSuccess) + 173 (Cancel onClick). This would crash when clicking "Cancel" in the New GRN dialog or on successful GRN creation — a latent bug not caught by prior render-only QA.
+- All other `onOpenChange(false)` usages across the codebase were verified VALID (either received as a component prop — PODialog, TransferDialog, SODialog, PutAwayDialog, OrderDialog, PartyDialog, ItemDialog, AddBomLineDialog — or locally defined — quality.tsx InspectionList defines its own `onOpenChange` wrapper at line 61).
+
+## Goals / completed modifications / verification
+
+### Bug fix — `src/components/erp/pages/purchase.tsx`
+- **IndentList** (line 180): fixed line 189 (`onSuccess: () => onOpenChange(false)` → `setOpen(false)`) + line 218 (`onClick={() => onOpenChange(false)}` → `setOpen(false)`).
+- **GrnList** (line 113): fixed line 123 (`onSuccess: () => onOpenChange(false)` → `setOpen(false)`) + line 173 (`onClick={() => onOpenChange(false)}` → `setOpen(false)`).
+
+### Verification results
+- Turbopack recompiled cleanly (`✓ Compiled in 454ms` + `✓ Compiled in 472ms`).
+- agent-browser end-to-end: logged in as admin → Purchase → Indents tab → "New indent" → dialog opened ("New purchase indent" + Item/Qty/Required-by fields) → **Cancel clicked → no errors** (empty `agent-browser errors`). The `ReferenceError` is gone.
+- Full codebase scan: confirmed no remaining `onOpenChange` misuse in self-contained (non-prop) components.
+
+## Unresolved issues / risks + next-phase priorities
+- This was a copy-paste bug pattern. The prior rounds' QA checked that views RENDER but didn't exercise every dialog's Cancel/submit flow. Future QA rounds should click-through key dialogs (New item, New SO, New PO, New GRN, New indent, Transfer, Put away, Inspect) to catch这类 reference errors early.
+- **Recurring webDevReview cron (id 450167)** is active.
+- Next-phase recommendations:
+  1. Add an ESLint rule or grep-based CI check that flags `onOpenChange` usage in components that don't receive it as a prop (catch this pattern automatically).
+  2. Exercise all dialog Cancel/submit flows in the next QA round.
+  3. Resume the standard webDevReview enhancement work (styling + features) in the next round.
