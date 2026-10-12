@@ -15,7 +15,7 @@ function createPrismaClient() {
       url,
       authToken: process.env.DATABASE_AUTH_TOKEN,
     })
-    const adapter = new PrismaLibSQL(client)
+    const adapter = new PrismaLibSql(client)
     return new PrismaClient({ adapter } as never)
   }
   // Local dev: plain PrismaClient against the SQLite file.
