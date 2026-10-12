@@ -1,30 +1,14 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSql } from '@prisma/adapter-libsql'
-import { createClient } from '@libsql/client'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
 function createPrismaClient(): PrismaClient {
-  const url = process.env.DATABASE_URL ?? ''
-  // No URL at all (build time / missing env): return a stub that will be
-  // replaced on first real request. Avoids throwing during prerender.
-  if (!url || url === 'undefined') {
-    return new PrismaClient()
-  }
-  // Turso / libSQL hosted DB (production: libsql://...). Falls back to the
-  // local SQLite file (file:/.../custom.db) when no Turso URL is configured.
-  if (url.startsWith('libsql:') || url.startsWith('http:') || url.startsWith('https:')) {
-    const client = createClient({
-      url,
-      authToken: process.env.DATABASE_AUTH_TOKEN,
-    })
-    const adapter = new PrismaLibSql(client)
-    return new PrismaClient({ adapter } as never)
-  }
-  // Local dev: plain PrismaClient against the SQLite file.
-  return new PrismaClient({ log: ['query'] })
+  // Prisma reads DATABASE_URL directly — no adapter needed for SQLite or Postgres.
+  // - Local dev: DATABASE_URL=file:/.../custom.db (SQLite)
+  // - Vercel prod: DATABASE_URL=postgresql://... (Neon Postgres)
+  return new PrismaClient({ log: process.env.NODE_ENV === 'production' ? ['error'] : ['query'] })
 }
 
 // Lazy singleton — only create the client on first access, NOT at module

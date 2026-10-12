@@ -1,16 +1,13 @@
-// Tau Power Electronics — Manufacturing ERP
-// Prisma schema (SQLite). Ported from the original Drizzle schema (Phases 1-4).
-
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
+  // Supports both SQLite (local dev: file:/...) and Postgres (Vercel prod: postgresql://...).
+  // Set DATABASE_URL accordingly.
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
-
 // ============================ Phase 1: Masters, BOM, Inventory, Production ============================
 
 model Item {
