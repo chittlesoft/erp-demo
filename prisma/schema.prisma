@@ -3,9 +3,7 @@ generator client {
 }
 
 datasource db {
-  // Supports both SQLite (local dev: file:/...) and Postgres (Vercel prod: postgresql://...).
-  // Set DATABASE_URL accordingly.
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 // ============================ Phase 1: Masters, BOM, Inventory, Production ============================
