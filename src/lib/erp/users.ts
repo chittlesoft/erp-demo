@@ -63,7 +63,7 @@ export async function ensureUsers(): Promise<void> {
 
   for (const u of DEMO_USERS) {
     const hash = hashPassword(u.password);
-    await db.$executeRaw`INSERT INTO users (email, name, password, role, active) VALUES (${u.email}, ${u.name}, ${hash}, ${u.role}, 1)`;
+    await db.$executeRaw`INSERT INTO users (email, name, password, role, active) VALUES (${u.email}, ${u.name}, ${hash}, ${u.role}, true)`;
   }
 }
 
@@ -170,7 +170,7 @@ export async function recordLogin(
     // UPDATE users.lastLogin — use the ISO string; SQLite stores DateTime? as
     // TEXT (ISO-8601) under the hood via Prisma.
     await db.$executeRaw`UPDATE users SET lastLogin = ${ts} WHERE id = ${userId}`;
-    await db.$executeRaw`INSERT INTO login_events (userId, ts, email, ip, userAgent, success) VALUES (${userId}, ${ts}, ${email}, ${ip}, ${userAgent}, 1)`;
+    await db.$executeRaw`INSERT INTO login_events (userId, ts, email, ip, userAgent, success) VALUES (${userId}, ${ts}, ${email}, ${ip}, ${userAgent}, true)`;
   } catch (e) {
     // Login recording must never break the sign-in flow.
     console.error("[users] recordLogin failed:", e instanceof Error ? e.message : e);
