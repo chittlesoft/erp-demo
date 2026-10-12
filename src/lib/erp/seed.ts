@@ -230,7 +230,8 @@ export async function ensureSeeded(force = false) {
     const order = await db.productionOrder.create({ data: { orderNo, itemId: I[code], qty: q, dueDate: d, status: "IN_PROGRESS", warehouseId: code.startsWith("SFG") ? W.WIP : W.FG, consumedBatches: "[]" } });
     // issue material FIFO (skip detail; just mark consumed)
     await db.stockTxn.create({ data: { date: d, itemId: I[code], warehouseId: order.warehouseId, qty: g, txnType: "PROD_OUT", ref: orderNo, batchNo: orderNo, unitCost: await rolledCost(I[code]) } });
-    // serials
+    // serials — BULK INSERT for performance (was individual db.serial.create
+    // per serial = 700+ round-trips against remote Postgres; now 1 query).
     const item = await db.item.findUnique({ where: { id: I[code] } });
     if (item && item.tracking === "serial") {
       const ym = d.slice(2, 4) + d.slice(5, 7);
@@ -238,10 +239,19 @@ export async function ensureSeeded(force = false) {
       const existing = await db.serial.findMany({ where: { serialNo: { startsWith: prefix } }, select: { serialNo: true } });
       let seq = existing.length ? Math.max(...existing.map(s => parseInt(s.serialNo.slice(prefix.length), 10))) : 0;
       const results = [...Array(g).fill("PASS"), ...Array(r).fill("FAIL")];
-      for (const res of results) {
+      const serialData = results.map((res) => {
         seq++;
-        await db.serial.create({ data: { serialNo: prefix + String(seq).padStart(5, "0"), itemId: item.id, productionOrderId: order.id, eolResult: res, eolData: JSON.stringify(simulatedEol(item.productLine, res === "PASS")), date: d, status: res === "PASS" ? "IN_STOCK" : "REJECTED" } });
-      }
+        return {
+          serialNo: prefix + String(seq).padStart(5, "0"),
+          itemId: item.id,
+          productionOrderId: order.id,
+          eolResult: res,
+          eolData: JSON.stringify(simulatedEol(item.productLine, res === "PASS")),
+          date: d,
+          status: res === "PASS" ? "IN_STOCK" : "REJECTED",
+        };
+      });
+      await db.serial.createMany({ data: serialData });
     }
     await db.productionOrder.update({ where: { id: order.id }, data: { status: "COMPLETED", goodQty: g, rejectQty: r } });
   }
