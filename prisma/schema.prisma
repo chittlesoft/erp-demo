@@ -2,7 +2,8 @@
 // Prisma schema (SQLite). Ported from the original Drizzle schema (Phases 1-4).
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
